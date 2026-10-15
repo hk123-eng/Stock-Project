@@ -22,7 +22,7 @@
 - [x] Build permissions granted (StockIamScoped, StockProjectBuildAccess, StockProjectBuildAccessPhase3to6)
 - [ ] **Contact AWS Support to verify the account for CloudFront** (CreateDistribution: "Your account must be verified")
 - [ ] Grant missing permission for Step Functions logging (JSON in PROJECT_CONTEXT.md §13)
-- [ ] Create your own Cognito user (no users were created by the deploy user)
+- [x] Create your own Cognito user (2 users found in the pool on 2026-10-15; created by you)
 
 ## Phase 1 — Real data
 - [x] Select free/low-cost stock API: Alpha Vantage free key, `TIME_SERIES_DAILY`, `outputsize=compact` (details and caveats in PROJECT_CONTEXT.md §8 Phase 1)
@@ -102,14 +102,38 @@
 ### 1. Prediction scoring + model health
 - [x] Lambda `stock-evaluate` + bounded role `stock-evaluate-role`; scores unscored predictions, stores model + naive error, publishes `StockProject/ModelHealth` metrics (live-tested 2026-10-06: 1 scored, re-run idempotent)
 - [x] Pipeline step `ScorePredictions` after the alert step (validated, deployed; failure path re-tested)
-- [ ] Observe the first scheduled run with ScorePredictions (2026-10-06 18:30 New York)
+- [x] Observe the first scheduled run with ScorePredictions (verified 2026-10-15: 7 scheduled runs 2026-10-07 → 2026-10-15 SUCCEEDED, 8 predictions scored)
 - [x] `GET /model-health` (JWT) with "insufficient data" below 20 scored days; `/predictions` uses stored scores
 - [x] Dashboard Model health panel + offline tests; uploaded to private bucket
 - [ ] Signed-in browser check of the panel (needs the user's login)
-### 2. MACD + Bollinger signals, per-type alert dedup — not started
-### 3. Watchlist AAPL MSFT GOOGL AMZN NVDA, one combined alert email per run — not started
-### 4. Retraining plan document — not started
-### 5. CI (needs your private GitHub repo), CloudWatch dashboard (needs `cloudwatch:PutDashboard`), Scheduler DLQ (needs SQS permissions + boundary update) — not started
+### 2. MACD + Bollinger signals, per-type alert dedup (2026-10-15)
+- [x] MACD(12,26,9), Bollinger(20, 2σ population) in `stock-signals`; rules MACD_CROSS, BOLLINGER_BREAK (transition-only, switchable)
+- [x] Dedup per (symbol, trade_date, type) via `alert_sent_<TYPE>`; live-verified by direct invocation (repeat → `already_sent`)
+- [x] Known-value tests (hand-computed) `tests/test_signals_macd_bb.py`; API `notified_types`/`test_alert`; dashboard values + bands
+- [ ] Observe a pipeline run with the new signals code (scheduled run 2026-10-15 18:30 ET, then my test run after 19:00 ET)
+### 3. Watchlist AAPL MSFT GOOGL AMZN NVDA, one combined alert email per run (2026-10-15)
+- [x] Map definition generated + validated (`--watchlist`), structural tests `tests/test_state_machine.py`
+- [x] Lambda `stock-alert-digest` + bounded role; tests `tests/test_digest.py`; direct invocation OK
+- [x] Ingest: DailyLimitError vs RateLimitError (HTTP-200 throttle messages), suspicious-jump (split) check; deployed (rollback `stock-ingest:1`)
+- [x] API allow-list + "no validated model" 404s; dashboard ticker selector + smoke test; deployed/uploaded
+- [ ] Switch state machine + schedule input `{"symbols":[...]}` after 19:00 ET; full test run (backfill 1 call per ticker)
+- [ ] Forced per-ticker failure test (`["AAPL","ZZZZ"]`) after the switch
+### 4. Retraining plan document
+- [x] `docs/retraining-plan.md` (2026-10-15). Nothing trained.
+### 5. CI, CloudWatch dashboard, Scheduler DLQ
+- [x] 5a: local git + `.gitignore` + secret scan + `.github/workflows/ci.yml` (no remote; you create the repo and push)
+- [x] 5b: CloudWatch dashboard `stock-project` (36 metrics)
+- [x] 5c: SQS `stock-pipeline-dlq` (SSE-SQS, 14 d, scheduler-only policy), scheduler role `sqs:SendMessage`, alarms `stock-pipeline-dlq-not-empty` + `stock-pipeline-dlq-new-message`
+- [x] 5c: DLQ test via inert schedule `stock-test-dlq-20261015`: message in DLQ, both alarms → ALARM → SNS (2026-10-15)
+- [ ] 5c: attach the DLQ to `stock-daily-pipeline` (with the schedule switch after 19:00 ET)
+
+## Phase 9 — stretch (checked 2026-10-15)
+- [ ] (a) Athena + Glue table — parked, permissions missing (JSON in docs/RUN-REPORT.md)
+- [ ] (b) EventBridge custom bus + rule — parked, permissions missing
+- [ ] (c) X-Ray — parked (boundary lacks xray actions; pipeline role must not be edited; HTTP API unsupported)
+- [x] (d) API Gateway throttling — already 10 rps / burst 20
+- [ ] (e) TTL/lifecycle — S3 lifecycle denied; DynamoDB TTL deliberately not enabled (no test-only data)
+- [ ] CloudTrail, Cognito groups, SAM/CloudFormation, Bedrock — plan notes only (docs)
 
 ## Cleanup
 - [ ] Confirm seeder is no longer needed (last used 2026-09-16; not yet confirmed)
@@ -118,7 +142,7 @@
 - [ ] Delete `layers/tflite-layer.zip` (81 MB) from S3 only after approval
 - [ ] Delete unused layer `tflite-runtime-py310` v1 only after approval
 - [x] Set retention on Lambda log groups: 30 days on all six `/aws/lambda/stock-*` (incl. `stock-evaluate`, 2026-10-06)
-- [ ] Delete inert test schedule `stock-test-once-20261005` (approval + permission)
+- [ ] Delete inert test schedules `stock-test-once-20261005` and `stock-test-dlq-20261015` (approval + permission)
 - [ ] Remove unused permissions
 - [ ] Verify no public resources (audit checked: S3 Block Public Access on and no bucket policy; no Lambda resource policies or function URLs; SNS policy limited to this account; no API Gateway/CloudFront. Not a full account-wide check.)
 - [ ] Review AWS cost (zero-spend budget exists; Cost Explorer not reviewed)

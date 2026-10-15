@@ -11,7 +11,7 @@ Only verified facts are recorded here. Times are UTC unless marked ET (America/N
 | 2. Phase 8 item 3 (watchlist) | Lambdas/API/dashboard deployed; state machine + schedule switch pending (evening window) | see Item 2 |
 | 3. Phase 8 item 4 (retraining plan) | Done | `docs/retraining-plan.md` |
 | 4. Phase 8 item 5a (CI + local git) | Done (not run on GitHub: no remote) | `.github/workflows/ci.yml`, `tests/secret_scan.py` |
-| 5. Phase 8 item 5b/5c (CloudWatch dashboard, DLQ) | Dashboard done; DLQ created, alarms created, test running; schedule DLQ attach pending (evening window) | see Item 5 |
+| 5. Phase 8 item 5b/5c (CloudWatch dashboard, DLQ) | Dashboard done; DLQ + alarms done and tested end to end; attaching the DLQ to `stock-daily-pipeline` pending (evening window) | see Item 5 |
 | 6. Step Functions logging | Parked (AccessDenied re-checked 2026-10-15) | see "Permissions" |
 | 7. Phase 9 | (a)(b)(c)(e) parked, (d) already in place | see Item 7 |
 
@@ -60,6 +60,7 @@ Only verified facts are recorded here. Times are UTC unless marked ET (America/N
 - `stock-scheduler-role` inline policy now also allows `sqs:SendMessage` on that queue only.
 - Alarms `stock-pipeline-dlq-not-empty` and `stock-pipeline-dlq-new-message` → SNS `stock-prediction-alerts`.
 - Test schedule `stock-test-dlq-20261015` (one-time, 2026-10-15 13:55 UTC, targets non-existent state machine `stock-dlq-test-does-not-exist`, 0 retries, ActionAfterCompletion NONE → inert afterwards). **Listed for your cleanup.**
+- **DLQ test result (2026-10-15):** the schedule fired at 13:55:00 UTC; Scheduler put 1 message in `stock-pipeline-dlq` (peeked with visibility timeout 0, not deleted): `ERROR_CODE AccessDeniedException` (scheduler role may only start `stock-prediction-pipeline`), `RETRY_ATTEMPTS 0`, `SCHEDULE_ARN …/stock-test-dlq-20261015`. `stock-pipeline-dlq-new-message` → ALARM, SNS action succeeded 13:57:13 UTC; `stock-pipeline-dlq-not-empty` → ALARM, SNS action succeeded 13:58:46 UTC. You should have received 2 ALARM emails. The test message stays until it expires (14 days, ~2026-10-29) or you purge the queue; until then `-not-empty` stays in ALARM (D9).
 
 ## Item 7 – Phase 9 (checked with `iam simulate-principal-policy`, read-only)
 | Item | Result |
@@ -69,3 +70,93 @@ Only verified facts are recorded here. Times are UTC unless marked ET (America/N
 | (c) X-Ray | Parked: Lambda roles would need `xray:PutTraceSegments`/`PutTelemetryRecords`, which `StockRoleBoundary` does not allow (boundary edits are forbidden); the state machine role may not be edited (rule 8); HTTP APIs do not support X-Ray tracing (REST APIs only) |
 | (d) API throttling | Already in place since Phase 5: `$default` stage 10 rps / burst 20 (verified 2026-10-15) |
 | (e) TTL / lifecycle | S3 lifecycle denied; DynamoDB TTL permitted but intentionally not enabled (D10) |
+
+## CloudFront (checked 2026-10-15 ~14:00 UTC)
+Still blocked. `infra/cloudfront/finish-cloudfront.sh` stopped at step 1: `CreateDistributionWithTags` → "Your account must be verified before you can add new CloudFront resources". Nothing was created; the dashboard bucket still has no bucket policy and Block Public Access ×4 (anonymous GET → 403). The script's final curl checks were fixed (`/dev/null` does not work for Windows curl with `MSYS_NO_PATHCONV=1`).
+
+## Permissions needed (ready to paste; nothing was worked around)
+All of these are for **you (account administrator) to apply in IAM**. The deploy user cannot and did not change its own permissions or the boundary.
+
+### P1 – Step Functions execution logging (policy on IAM user `stock-project`; unchanged from PROJECT_CONTEXT.md §13)
+Re-checked 2026-10-15: `logs:CreateLogGroup` on `/aws/vendedlogs/states/stock-prediction-pipeline` → AccessDenied.
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "StockSfnLogGroup", "Effect": "Allow",
+     "Action": ["logs:CreateLogGroup", "logs:PutRetentionPolicy"],
+     "Resource": "arn:aws:logs:ap-south-1:542601847637:log-group:/aws/vendedlogs/states/stock-*"},
+    {"Sid": "SfnLogDelivery", "Effect": "Allow",
+     "Action": ["logs:CreateLogDelivery", "logs:GetLogDelivery", "logs:UpdateLogDelivery", "logs:DeleteLogDelivery",
+                "logs:ListLogDeliveries", "logs:PutResourcePolicy", "logs:DescribeResourcePolicies", "logs:DescribeLogGroups"],
+     "Resource": "*"}
+  ]
+}
+```
+
+### P2 – Phase 9a Athena over S3 (policy on IAM user `stock-project`)
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "GlueCatalogStockProject", "Effect": "Allow",
+     "Action": ["glue:CreateDatabase", "glue:GetDatabase", "glue:CreateTable", "glue:GetTable", "glue:UpdateTable", "glue:GetPartitions"],
+     "Resource": ["arn:aws:glue:ap-south-1:542601847637:catalog",
+                  "arn:aws:glue:ap-south-1:542601847637:database/stock_project",
+                  "arn:aws:glue:ap-south-1:542601847637:table/stock_project/*"]},
+    {"Sid": "AthenaPrimaryWorkgroup", "Effect": "Allow",
+     "Action": ["athena:StartQueryExecution", "athena:GetQueryExecution", "athena:GetQueryResults", "athena:StopQueryExecution"],
+     "Resource": "arn:aws:athena:ap-south-1:542601847637:workgroup/primary"},
+    {"Sid": "AthenaResultsPrivatePrefix", "Effect": "Allow",
+     "Action": ["s3:PutObject", "s3:GetObject", "s3:AbortMultipartUpload"],
+     "Resource": "arn:aws:s3:::stock-prediction-raw-542601847637-ap-south-1-an/athena-results/*"},
+    {"Sid": "AthenaBucketLocation", "Effect": "Allow",
+     "Action": ["s3:GetBucketLocation", "s3:ListBucket"],
+     "Resource": "arn:aws:s3:::stock-prediction-raw-542601847637-ap-south-1-an"}
+  ]
+}
+```
+
+### P3 – Phase 9b EventBridge custom bus (two parts)
+(1) Policy on IAM user `stock-project`:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "StockBusAndRules", "Effect": "Allow",
+     "Action": ["events:CreateEventBus", "events:DescribeEventBus", "events:PutRule", "events:DescribeRule", "events:PutTargets", "events:ListTargetsByRule"],
+     "Resource": ["arn:aws:events:ap-south-1:542601847637:event-bus/stock-pipeline",
+                  "arn:aws:events:ap-south-1:542601847637:rule/stock-pipeline/stock-*"]},
+    {"Sid": "EventsLogTarget", "Effect": "Allow",
+     "Action": ["logs:CreateLogGroup", "logs:PutRetentionPolicy"],
+     "Resource": "arn:aws:logs:ap-south-1:542601847637:log-group:/aws/events/stock-*"},
+    {"Sid": "EventsLogsResourcePolicy", "Effect": "Allow",
+     "Action": ["logs:PutResourcePolicy", "logs:DescribeResourcePolicies"], "Resource": "*"}
+  ]
+}
+```
+(2) A new default version of `StockRoleBoundary` that adds this statement (so `stock-alert-digest-role` may publish run events):
+```json
+{"Sid": "StockBusPutEvents", "Effect": "Allow", "Action": "events:PutEvents",
+ "Resource": "arn:aws:events:ap-south-1:542601847637:event-bus/stock-pipeline"}
+```
+
+### P4 – Phase 9c X-Ray (two parts; HTTP API itself cannot be traced)
+(1) A new default version of `StockRoleBoundary` that adds:
+```json
+{"Sid": "XRayWrite", "Effect": "Allow",
+ "Action": ["xray:PutTraceSegments", "xray:PutTelemetryRecords", "xray:GetSamplingRules", "xray:GetSamplingTargets"],
+ "Resource": "*"}
+```
+(2) The same statement as an inline policy on `stock-prediction-sfn-role` (the deploy user is not allowed to edit that role). The deploy user can then add it to the `stock-*` Lambda roles and turn on tracing with permissions it already has.
+
+### P5 – Phase 9e S3 lifecycle for a test prefix (optional; policy on IAM user `stock-project`)
+```json
+{"Version": "2012-10-17", "Statement": [{"Sid": "RawBucketLifecycle", "Effect": "Allow",
+  "Action": ["s3:GetLifecycleConfiguration", "s3:PutLifecycleConfiguration"],
+  "Resource": "arn:aws:s3:::stock-prediction-raw-542601847637-ap-south-1-an"}]}
+```
+The only rule intended: expire objects under `athena-results/` after 7 days. No rule would ever cover `raw/`, `models/` or `predictions/`.
+
+### Not needed any more
+The DLQ and CloudWatch dashboard permissions you granted (`StockProjectPhase8`, boundary v2) were sufficient.

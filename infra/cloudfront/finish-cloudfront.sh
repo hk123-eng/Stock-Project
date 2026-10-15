@@ -48,5 +48,5 @@ aws apigatewayv2 update-api --api-id $API $P \
 
 aws cloudfront wait distribution-deployed --id $DIST_ID --profile stock-project
 echo "Dashboard: https://$DOMAIN/"
-echo "Direct S3 (must be 403): $(curl -s -o /dev/null -w '%{http_code}' https://$BK.s3.ap-south-1.amazonaws.com/index.html)"
-echo "Via CloudFront (must be 200): $(curl -s -o /dev/null -w '%{http_code}' https://$DOMAIN/)"
+echo "Direct S3 (must be 403): $(curl -s -o build/cf-check.txt -w '%{http_code}' https://$BK.s3.ap-south-1.amazonaws.com/index.html)"
+echo "Via CloudFront (must be 200): $(curl -s -o build/cf-check.txt -w '%{http_code}' https://$DOMAIN/)"
