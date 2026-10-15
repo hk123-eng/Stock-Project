@@ -32,7 +32,7 @@ def main():
     print("status", d["status"], "duration_s", round((d["stopDate"] - d["startDate"]).total_seconds()))
     out = json.loads(d.get("output") or "{}")
     for t in out.get("tickers", []):
-        ing, sig, pred, sc = (t.get(k) or {} for k in ("ingest", "prediction", "signals", "score"))
+        ing, pred, sig, sc = (t.get(k) or {} for k in ("ingest", "prediction", "signals", "score"))
         dq = ing.get("data_quality") or {}
         print(json.dumps({
             "symbol": t.get("symbol"), "ok": t.get("ok"), "failed_step": t.get("failed_step"),

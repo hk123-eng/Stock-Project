@@ -1,15 +1,27 @@
 {
-  "Name": "stock-daily-pipeline",
-  "GroupName": "default",
-  "Description": "Mon-Fri 18:30 America/New_York (2.5 h after the 16:00 US close): run stock-prediction-pipeline for AAPL",
-  "ScheduleExpression": "cron(30 18 ? * MON-FRI *)",
-  "ScheduleExpressionTimezone": "America/New_York",
-  "FlexibleTimeWindow": {"Mode": "OFF"},
-  "State": "ENABLED",
-  "Target": {
-    "Arn": "arn:aws:states:ap-south-1:542601847637:stateMachine:stock-prediction-pipeline",
-    "RoleArn": "arn:aws:iam::542601847637:role/stock-scheduler-role",
-    "Input": "{\"symbol\":\"AAPL\"}",
-    "RetryPolicy": {"MaximumRetryAttempts": 2, "MaximumEventAgeInSeconds": 3600}
-  }
+    "ActionAfterCompletion": "NONE",
+    "Arn": "arn:aws:scheduler:ap-south-1:542601847637:schedule/default/stock-daily-pipeline",
+    "CreationDate": "2026-10-05T20:07:23.943000+05:30",
+    "Description": "Mon-Fri 18:30 America/New_York (2.5 h after the 16:00 US close): run stock-prediction-pipeline for the watchlist AAPL MSFT GOOGL AMZN NVDA; failed starts go to SQS stock-pipeline-dlq",
+    "FlexibleTimeWindow": {
+        "Mode": "OFF"
+    },
+    "GroupName": "default",
+    "LastModificationDate": "2026-10-16T04:31:43.742000+05:30",
+    "Name": "stock-daily-pipeline",
+    "ScheduleExpression": "cron(30 18 ? * MON-FRI *)",
+    "ScheduleExpressionTimezone": "America/New_York",
+    "State": "ENABLED",
+    "Target": {
+        "Arn": "arn:aws:states:ap-south-1:542601847637:stateMachine:stock-prediction-pipeline",
+        "DeadLetterConfig": {
+            "Arn": "arn:aws:sqs:ap-south-1:542601847637:stock-pipeline-dlq"
+        },
+        "Input": "{\"symbols\":[\"AAPL\",\"MSFT\",\"GOOGL\",\"AMZN\",\"NVDA\"]}",
+        "RetryPolicy": {
+            "MaximumEventAgeInSeconds": 3600,
+            "MaximumRetryAttempts": 2
+        },
+        "RoleArn": "arn:aws:iam::542601847637:role/stock-scheduler-role"
+    }
 }
