@@ -20,7 +20,7 @@
 - [x] Choose market-data API (Phase 1): Alpha Vantage, decided 2026-10-04
 - [ ] Group-project question: if this is a team project, email support@alphavantage.co to confirm the use is allowed and request educational verification
 - [x] Build permissions granted (StockIamScoped, StockProjectBuildAccess, StockProjectBuildAccessPhase3to6)
-- [ ] **Contact AWS Support to verify the account for CloudFront** (CreateDistribution: "Your account must be verified")
+- [ ] **Contact AWS Support to verify the account for CloudFront** (still blocked 2026-10-15) (CreateDistribution: "Your account must be verified")
 - [ ] Grant missing permission for Step Functions logging (JSON in PROJECT_CONTEXT.md §13)
 - [x] Create your own Cognito user (2 users found in the pool on 2026-10-15; created by you)
 
@@ -110,14 +110,16 @@
 - [x] MACD(12,26,9), Bollinger(20, 2σ population) in `stock-signals`; rules MACD_CROSS, BOLLINGER_BREAK (transition-only, switchable)
 - [x] Dedup per (symbol, trade_date, type) via `alert_sent_<TYPE>`; live-verified by direct invocation (repeat → `already_sent`)
 - [x] Known-value tests (hand-computed) `tests/test_signals_macd_bb.py`; API `notified_types`/`test_alert`; dashboard values + bands
-- [ ] Observe a pipeline run with the new signals code (scheduled run 2026-10-15 18:30 ET, then my test run after 19:00 ET)
+- [x] Observe a pipeline run with the new signals code (scheduled run 2026-10-15 22:30 UTC SUCCEEDED; watchlist test run 23:01 UTC raised NVDA BOLLINGER_BREAK)
 ### 3. Watchlist AAPL MSFT GOOGL AMZN NVDA, one combined alert email per run (2026-10-15)
 - [x] Map definition generated + validated (`--watchlist`), structural tests `tests/test_state_machine.py`
 - [x] Lambda `stock-alert-digest` + bounded role; tests `tests/test_digest.py`; direct invocation OK
 - [x] Ingest: DailyLimitError vs RateLimitError (HTTP-200 throttle messages), suspicious-jump (split) check; deployed (rollback `stock-ingest:1`)
 - [x] API allow-list + "no validated model" 404s; dashboard ticker selector + smoke test; deployed/uploaded
-- [ ] Switch state machine + schedule input `{"symbols":[...]}` after 19:00 ET; full test run (backfill 1 call per ticker)
-- [ ] Forced per-ticker failure test (`["AAPL","ZZZZ"]`) after the switch
+- [x] Switch state machine + schedule input `{"symbols":[...]}` (2026-10-15 23:01 UTC); full test run SUCCEEDED in 90 s, 4 new tickers backfilled 100 rows each, 0 suspicious jumps
+- [x] Forced per-ticker failure test (`["AAPL","ZZZZ"]`): SUCCEEDED, ZZZZ reported failed, email "1 FAILED"; also `{}` → FAILED via PublishFailure and legacy `{"symbol":"AAPL"}` → SUCCEEDED
+- [ ] First scheduled watchlist run (2026-10-16 18:30 ET): check it in the console or email
+- [ ] Not tested live: a ticker failing inside a Lambda; a real Alpha Vantage throttle
 ### 4. Retraining plan document
 - [x] `docs/retraining-plan.md` (2026-10-15). Nothing trained.
 ### 5. CI, CloudWatch dashboard, Scheduler DLQ
@@ -125,7 +127,8 @@
 - [x] 5b: CloudWatch dashboard `stock-project` (36 metrics)
 - [x] 5c: SQS `stock-pipeline-dlq` (SSE-SQS, 14 d, scheduler-only policy), scheduler role `sqs:SendMessage`, alarms `stock-pipeline-dlq-not-empty` + `stock-pipeline-dlq-new-message`
 - [x] 5c: DLQ test via inert schedule `stock-test-dlq-20261015`: message in DLQ, both alarms → ALARM → SNS (2026-10-15)
-- [ ] 5c: attach the DLQ to `stock-daily-pipeline` (with the schedule switch after 19:00 ET)
+- [x] 5c: DLQ attached to `stock-daily-pipeline` (2026-10-15 23:01 UTC, verified with get-schedule)
+- [ ] Purge the DLQ test message (optional; it expires ~2026-10-29); until then `stock-pipeline-dlq-not-empty` stays in ALARM
 
 ## Phase 9 — stretch (checked 2026-10-15)
 - [ ] (a) Athena + Glue table — parked, permissions missing (JSON in docs/RUN-REPORT.md)

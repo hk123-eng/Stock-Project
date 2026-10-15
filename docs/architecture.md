@@ -1,45 +1,61 @@
 # Architecture — Cloud Stock Price Monitoring and Prediction
 
 Region `ap-south-1` (Mumbai), account `542601847637`. Everything is serverless and pay-per-use.
-Verified live on 2026-10-05 unless marked **pending**.
+Verified live on 2026-10-05; watchlist, digest, DLQ and dashboard parts verified 2026-10-15. Items marked **pending** are not live.
 
-## End-to-end flow
+## End-to-end flow (watchlist pipeline, live since 2026-10-15 23:01 UTC)
 
 ```mermaid
 flowchart LR
     subgraph Schedule
-        SCH["EventBridge Scheduler<br/>stock-daily-pipeline<br/>Mon–Fri 18:30 America/New_York<br/>input {&quot;symbol&quot;:&quot;AAPL&quot;}"]
+        SCH["EventBridge Scheduler<br/>stock-daily-pipeline<br/>Mon–Fri 18:30 America/New_York<br/>input symbols AAPL MSFT GOOGL AMZN NVDA"]
+        DLQ[("SQS stock-pipeline-dlq<br/>failed starts, SSE-SQS, 14 d")]
     end
 
-    subgraph Pipeline["Step Functions: stock-prediction-pipeline"]
-        V{"ValidateInput<br/>symbol present,<br/>string, allow-listed"}
-        ING["IngestPrices<br/>Lambda stock-ingest"]
-        PRED["Predict<br/>Lambda stock-lstm-inference<br/>(TFLite LSTM)"]
-        SIG["ComputeSignals<br/>Lambda stock-signals"]
-        AL{"Alert needed?<br/>(deduplicated)"}
-        PUBA["PublishAlert"]
+    subgraph Pipeline["Step Functions: stock-prediction-pipeline (timeout 1800 s)"]
+        V{"ValidateInput<br/>symbols: 1–5 items<br/>or legacy symbol"}
+        subgraph MAP["ProcessWatchlist (Map, MaxConcurrency 1)"]
+            CS{"CheckSymbol<br/>allow-listed?"}
+            W["Wait 15 s<br/>(not before the 1st ticker)"]
+            ING["IngestPrices<br/>Lambda stock-ingest<br/>+ split/jump check"]
+            RM{"RouteModel<br/>AAPL and no new jump?"}
+            PRED["Predict<br/>Lambda stock-lstm-inference<br/>(TFLite LSTM, AAPL only)"]
+            SIG["ComputeSignals<br/>Lambda stock-signals<br/>SMA/RSI/MACD/Bollinger"]
+            SCORE["ScorePredictions<br/>Lambda stock-evaluate<br/>(AAPL only)"]
+            TF["Ticker…Failed<br/>(per-ticker result,<br/>other tickers continue)"]
+            CS -- yes --> W --> ING --> RM
+            RM -- yes --> PRED --> SIG
+            RM -- no --> SIG
+            SIG --> SCORE
+            CS -- no --> TF
+            ING -. error .-> TF
+            PRED -. error .-> TF
+            SIG -. error .-> TF
+            SCORE -. error .-> TF
+        end
+        DG["BuildDigest<br/>Lambda stock-alert-digest"]
+        DN{"DigestNeeded?<br/>(new alerts, warnings<br/>or failed tickers)"}
+        PUBD["PublishDigest<br/>ONE email per run"]
         PUBF["PublishFailure"]
-        SCORE["ScorePredictions<br/>Lambda stock-evaluate"]
-        V -- valid --> ING --> PRED --> SIG --> AL
-        AL -- yes --> PUBA --> SCORE
-        AL -- no --> SCORE
-        SCORE -. error .-> PUBF
+        V -- valid --> MAP --> DG --> DN
+        DN -- yes --> PUBD
         V -- invalid --> PUBF
-        ING -. error .-> PUBF
-        PRED -. error .-> PUBF
-        SIG -. error .-> PUBF
+        MAP -. error .-> PUBF
+        DG -. error .-> PUBF
     end
 
-    AV[("Alpha Vantage<br/>TIME_SERIES_DAILY<br/>compact, unadjusted")]
+    AV[("Alpha Vantage<br/>TIME_SERIES_DAILY<br/>compact, unadjusted<br/>1 call per ticker")]
     SSM[("SSM Parameter Store<br/>/stock-project/alphavantage-api-key<br/>SecureString")]
     S3RAW[("S3 stock-prediction-raw-…<br/>raw/ (API archive)<br/>models/ (LSTM + scaler)<br/>predictions/evaluation/")]
     DDBP[("DynamoDB stock-prices<br/>real rows: source=alphavantage<br/>+ 114 legacy synthetic rows")]
     DDBPR[("DynamoDB stock-predictions")]
-    DDBS[("DynamoDB stock-signals")]
+    DDBS[("DynamoDB stock-signals<br/>alert_sent_&lt;TYPE&gt; dedup")]
     SNS(["SNS stock-prediction-alerts<br/>(email)"])
-    CW["CloudWatch alarm<br/>stock-pipeline-failed-executions<br/>(Failed + TimedOut + Aborted)"]
+    CW["CloudWatch alarms<br/>stock-pipeline-failed-executions<br/>stock-pipeline-dlq-not-empty<br/>stock-pipeline-dlq-new-message"]
+    CWD["CloudWatch dashboard<br/>stock-project"]
 
     SCH --> V
+    SCH -. start failed .-> DLQ
     SSM -- key --> ING
     ING -- HTTPS --> AV
     ING -- raw JSON --> S3RAW
@@ -49,12 +65,15 @@ flowchart LR
     PRED --> DDBPR
     DDBP -- next real close --> SCORE
     SCORE -- actual, model + naive error --> DDBPR
-    SCORE -- custom metrics --> CWM[("CloudWatch metrics<br/>StockProject/ModelHealth")]
+    SCORE -- StockProject/ModelHealth --> CWD
+    DG -- StockProject/Pipeline --> CWD
     DDBP -- real closes --> SIG
     SIG --> DDBS
-    PUBA --> SNS
+    PUBD --> SNS
     PUBF --> SNS
-    Pipeline -. execution metrics .-> CW --> SNS
+    Pipeline -. execution metrics .-> CW
+    DLQ -. queue metrics .-> CW
+    CW --> SNS
 
     subgraph Web["Dashboard and API"]
         USER(["User browser"])
@@ -62,7 +81,7 @@ flowchart LR
         S3WEB[("S3 stock-dashboard-…<br/>private, Block Public Access")]
         COG["Cognito user pool<br/>stock-dashboard-users<br/>hosted UI, code + PKCE"]
         APIGW["API Gateway HTTP API<br/>stock-dashboard-api<br/>JWT authorizer on every route"]
-        API["Lambda stock-api<br/>(read-only)"]
+        API["Lambda stock-api<br/>(read-only; 5-ticker allow-list;<br/>model routes AAPL only)"]
     end
 
     USER -- HTTPS --> CF --> S3WEB
@@ -75,15 +94,19 @@ flowchart LR
     API -- evaluation report --> S3RAW
 ```
 
+Legacy input `{"symbol":"AAPL"}` is still accepted (wrapped into a one-item list by `LegacyInput`), so older manual tests keep working.
+
 ## Failure handling
 
 ```mermaid
 flowchart TD
-    E1["Bad input ({}, wrong type, unsupported symbol)"] --> VI["ValidateInput → InvalidInput (Pass)"] --> PF["PublishFailure → SNS"] --> F["Fail state"]
-    E2["Lambda error / timeout"] --> R["Retry (service errors ×2; IngestError ×1 after 60 s)"] --> C["Catch States.ALL → $.error"] --> PF
-    E3["Lambda returns statusCode ≠ 200"] --> CH["Check* Choice (IsPresent → IsNumeric → = 200)"] --> PF
+    E0["Scheduler cannot start the execution"] --> Q["Retry ×2 within 1 h → SQS stock-pipeline-dlq"] --> QA["DLQ alarms → SNS"]
+    E1["Bad run input ({}, not a list, 0 or >5 items)"] --> VI["ValidateInput → InvalidInput (Pass)"] --> PF["PublishFailure → SNS"] --> F["Fail state → execution FAILED"]
+    E5["One ticker fails (not allow-listed, Lambda error, statusCode ≠ 200,<br/>Alpha Vantage throttle after 1 retry)"] --> TF["Per-ticker Catch → Ticker…Failed result"] --> CONT["Other tickers continue"] --> DG["Digest email lists the failed ticker<br/>(subject: N FAILED); execution SUCCEEDS;<br/>metric StockProject/Pipeline TickerFailures"]
+    E2["Lambda error / timeout"] --> R["Retry (service errors ×2; IngestError/RateLimitError ×1 after 60 s;<br/>DailyLimitError never retried)"] --> TF
+    E6["Map, digest or SNS error"] --> PF
     F --> M["ExecutionsFailed metric"]
-    E4["Anything that escapes Catch<br/>(States.Runtime, execution timeout 900 s, abort)"] --> M
+    E4["Anything that escapes Catch<br/>(States.Runtime, execution timeout 1800 s, abort)"] --> M
     M --> A["Alarm stock-pipeline-failed-executions"] --> SNS["SNS email"]
 ```
 
@@ -94,7 +117,12 @@ flowchart TD
 | Prices stored as DynamoDB Numbers (Python `Decimal`) | The audit found `close` stored as String in 104 legacy rows. |
 | Idempotent ingestion | Rows are keyed by (symbol, close time); unchanged rows are skipped; re-runs give `inserted 0, unchanged 100`. |
 | One prediction per (symbol, as_of_date) | Re-running the pipeline on the same data overwrites rather than duplicates. |
-| Alert at most once per trading day, only on transitions | Prevents email spam; no daily "success" email. |
+| Alerts only on transitions, deduplicated per (symbol, trading day, alert type); ONE combined email per run | Prevents spam and never drops a second rule that fires for the same ticker and day; no daily "success" email. |
+| Watchlist as a Map with MaxConcurrency 1 and a 15 s wait | Alpha Vantage free tier allows 25 calls/day and throttles bursts; 5 tickers = 5 calls per run. Sequential processing keeps calls spaced. |
+| A failed ticker does not fail the run | Each ticker is isolated by its own Catch; the single digest email reports the failure, so there is one email instead of an email plus an alarm (decision D5 in `docs/RUN-REPORT.md`). |
+| Predictions only for AAPL | The LSTM was trained on AAPL only and does not beat a naive baseline; other tickers get prices and signals only, and the API returns 404 "no validated model" for them. |
+| Skip the AAPL prediction when new data contains a ≥ 25% day-over-day jump | Prices are unadjusted, so a stock split looks like a crash; feeding it to the model would produce a meaningless prediction. |
+| Separate digest Lambda | Its role can only write its logs and `StockProject/Pipeline` metrics; it reads no data. |
 | Scoring runs last in the pipeline and writes each score once | A scoring failure can't block the prediction or the alert; `attribute_not_exists(scored_at)` makes re-runs harmless. |
 | No model-health verdict below 20 scored days | One or two days of errors say nothing about accuracy; the API and dashboard show "insufficient data" instead. |
 | Schedule 18:30 New York time, Mon–Fri | 2.5 h after the 16:00 close, so Alpha Vantage has the day's bar; `America/New_York` handles DST. On US holidays the run is a harmless no-op (no new row, same prediction key, alert deduplicated). |

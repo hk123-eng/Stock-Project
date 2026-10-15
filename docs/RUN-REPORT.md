@@ -1,4 +1,4 @@
-# Run report (started 2026-10-15)
+# Run report (2026-10-15, finished 2026-10-15 ~23:30 UTC)
 
 Only verified facts are recorded here. Times are UTC unless marked ET (America/New_York).
 
@@ -7,13 +7,42 @@ Only verified facts are recorded here. Times are UTC unless marked ET (America/N
 |---|---|---|
 | 0. Re-verify live state | Done | 7 scheduled runs 2026-10-07 → 2026-10-15 SUCCEEDED; latest (started 2026-10-14 22:30 UTC) ran ScorePredictions → `newly_scored 1, already_scored 7, pending 1`. 108 real AAPL rows (2026-05-12 → 2026-10-14). Alarm OK. Schedule ENABLED. Cognito pool has 2 users (created by the user). |
 | Local git | Done | `git init` inside `stock-project/` (decision D1). Secret scan clean. Commits listed by `git log`. |
-| 1. Phase 8 item 2 (MACD, Bollinger, per-type dedup) | Code deployed + live-tested by direct invocation; pipeline run pending | see Item 1 |
-| 2. Phase 8 item 3 (watchlist) | Lambdas/API/dashboard deployed; state machine + schedule switch pending (evening window) | see Item 2 |
+| 1. Phase 8 item 2 (MACD, Bollinger, per-type dedup) | Done | Direct invocation dedup test; scheduled run 2026-10-15 22:30 UTC SUCCEEDED with the new code; watchlist test raised NVDA `BOLLINGER_BREAK` |
+| 2. Phase 8 item 3 (watchlist) | Done; live since 2026-10-15 23:01 UTC | 4 live test executions, see Item 2 |
 | 3. Phase 8 item 4 (retraining plan) | Done | `docs/retraining-plan.md` |
 | 4. Phase 8 item 5a (CI + local git) | Done (not run on GitHub: no remote) | `.github/workflows/ci.yml`, `tests/secret_scan.py` |
-| 5. Phase 8 item 5b/5c (CloudWatch dashboard, DLQ) | Dashboard done; DLQ + alarms done and tested end to end; attaching the DLQ to `stock-daily-pipeline` pending (evening window) | see Item 5 |
+| 5. Phase 8 item 5b/5c (CloudWatch dashboard, DLQ) | Done | DLQ test 13:55 UTC; DLQ attached to `stock-daily-pipeline` 23:01 UTC (verified with `get-schedule`) |
 | 6. Step Functions logging | Parked (AccessDenied re-checked 2026-10-15) | see "Permissions" |
 | 7. Phase 9 | (a)(b)(c)(e) parked, (d) already in place | see Item 7 |
+| 8. Final docs | Done | `PROJECT_CONTEXT.md`, `TODO.md`, `README.md`, `docs/architecture.md`, `docs/aws-inventory.md`, `docs/demo-and-viva.md` updated 2026-10-15 ~23:30 UTC |
+
+## Summary for the owner (read this first)
+**(1) Completed and verified**
+- Phase 8 item 2: MACD + Bollinger signals, per-type dedup, one combined email per run, dashboard bands. Evidence: direct-invocation dedup test; scheduled run 2026-10-15 22:30 UTC SUCCEEDED on the new code; live NVDA `BOLLINGER_BREAK` email from the watchlist test.
+- Phase 8 item 3: watchlist AAPL MSFT GOOGL AMZN NVDA live since 2026-10-15 23:01 UTC. Evidence: 4 test executions (Item 2 table); 100 real rows each for the 4 new tickers; API 404 "no validated model" for NVDA predictions.
+- Phase 8 item 4: `docs/retraining-plan.md` (nothing trained).
+- Phase 8 item 5a: local git, `.gitignore`, secret scan (0 findings), CI workflow (never run: no remote).
+- Phase 8 items 5b/5c: CloudWatch dashboard `stock-project`; SQS DLQ + 2 alarms, tested end to end, attached to the daily schedule.
+- Final docs updated to match the deployed system.
+- Tests: 59 Python unit tests (`.venv/Scripts/python tests/run_all.py`), `node tests/dashboard.test.js`, `node tests/dashboard.smoke.test.js`: all pass.
+
+**(2) Parked** (details below): Step Functions execution logging (P1), Athena/Glue (P2), EventBridge custom bus (P3), X-Ray (P4), S3 lifecycle (P5), CloudFront (account verification), DynamoDB TTL (deliberately not enabled, D10). CloudTrail, Cognito groups, SAM/CloudFormation and Bedrock: plan notes only (`docs/phase9-notes.md`).
+
+**(3) IAM JSON:** P1–P5 under "Permissions needed". All must be applied by you as the account administrator.
+
+**(4) Manual steps for you**
+1. Sign in to the dashboard in a browser with your Cognito user (`cd dashboard && python -m http.server 8080`, open http://localhost:8080/), check AAPL and NVDA views, the Bollinger toggle, model health.
+2. Open an AWS Support case to verify the account for CloudFront; afterwards run `bash infra/cloudfront/finish-cloudfront.sh` (it checks that anonymous S3 access stays 403).
+3. GitHub: create an empty private repository, then `git remote add origin <url>` and `git push -u origin main` from `stock-project/`. CI will run on push (tests only; no AWS credentials needed).
+4. Optional cleanup (deletions; none done): `stock-db-seeder` Lambda + `stock-db-seeder-role`; layer `tflite-runtime-py310` v1; S3 `layers/tflite-layer.zip`; schedules `stock-test-once-20261005` and `stock-test-dlq-20261015`; purge the DLQ test message (SQS console → `stock-pipeline-dlq` → Purge) so `stock-pipeline-dlq-not-empty` returns to OK (otherwise it expires ~2026-10-29); Lambda versions `stock-signals:1`, `stock-api:1`, `stock-ingest:1` are rollback points — keep them until you are happy.
+5. Alpha Vantage: if this is a group project, email support@alphavantage.co (commercial/other use: premium@alphavantage.co per their terms) to confirm the use is allowed.
+6. When you are done building, detach the build policies from IAM user `stock-project` (`StockProjectBuildAccess`, `StockProjectBuildAccessPhase3to6`, `StockProjectPhase8`, and `StockIamScoped` if no more roles are needed).
+7. Check the first scheduled watchlist run (Fri 2026-10-16 18:30 ET = 22:30 UTC): Step Functions console or the email (an email arrives only if there is a new alert, a jump warning or a failed ticker).
+8. Who ran execution `7f73a430-…` with `{"symbol":"XYZ"}` at 2026-10-15 18:55 UTC? Not the deploy user. If it was you, nothing to do.
+
+**(5) Resources and cost** — created in this run: Lambda `stock-alert-digest` + role `stock-alert-digest-role` (boundary) + its log group (30 days); SQS `stock-pipeline-dlq`; alarms `stock-pipeline-dlq-not-empty`, `stock-pipeline-dlq-new-message`; CloudWatch dashboard `stock-project`; metric namespace `StockProject/Pipeline`; test schedule `stock-test-dlq-20261015` (inert); Lambda versions `stock-signals:1`, `stock-api:1`, `stock-ingest:1`. Modified: state machine definition, `stock-daily-pipeline` target (input + DLQ), `stock-scheduler-role` inline policy (+`sqs:SendMessage` on the DLQ), code of `stock-ingest`/`stock-signals`/`stock-api`, dashboard files in the private bucket. Nothing deleted. Expected cost **$0.00/month** within free tiers (3 alarms ≤ 10 free, 1 dashboard ≤ 3 free, 4 custom metrics ≤ 10 free, SQS/Lambda/Step Functions far below free limits: about 20 Lambda invocations per weekday; the 5-ticker test entered 60 states, so about 1,300 state transitions a month against 4,000 free). Worst case without free tiers: well under $0.50/month — the largest item would be the CloudWatch dashboard ($3/month) only if the 3-dashboard free tier were exceeded, which it is not (this is the only dashboard).
+
+**(6) Alpha Vantage calls:** 7 of my 10 on 2026-10-15 (table below).
 
 ## Decisions taken with the defaults (no human available)
 - **D1 – git location.** An empty git repo (no commits) already exists at `C:\Users\hrush` (the whole home folder). It was not touched. A separate repo was created in `C:\Users\hrush\stock-project`. No remote, nothing pushed.
@@ -30,7 +59,14 @@ Only verified facts are recorded here. Times are UTC unless marked ET (America/N
 ## Alpha Vantage call count (my own calls; limit 10/day)
 | Date (UTC) | Calls | Purpose |
 |---|---|---|
-| 2026-10-15 | 0 so far | (scheduled runs are not counted here) |
+| 2026-10-15 23:01 UTC | 5 | `test-watchlist-20261015T230152` (1 per ticker; backfilled MSFT/GOOGL/AMZN/NVDA) |
+| 2026-10-15 23:03 UTC | 1 | `test-isolation-20261015T230353` (AAPL only; ZZZZ rejected before ingest) |
+| 2026-10-15 23:04 UTC | 0 | `test-invalid-20261015T230433` (`{}` rejected before the Map) |
+| 2026-10-15 23:04 UTC | 1 | `test-legacy-20261015T230444` (`{"symbol":"AAPL"}`) |
+| **2026-10-15 total** | **7 of my 10** | No retries happened (no throttle message). |
+
+Other calls on 2026-10-15 UTC, not mine: the scheduled run at 22:30 UTC (1 call, AAPL, old input). Execution `7f73a430-…` at 18:55 UTC with input `{"symbol":"XYZ"}` was **not started by the deploy user** (probably a manual console test); it failed at ValidateInput as designed and made 0 calls. Day total on the key: 8 of 25 (Alpha Vantage counts by its own day, which may not match UTC).
+From 2026-10-16 each scheduled run uses 5 calls (worst case 10 with retries).
 
 ## Item 1 – Phase 8 item 2: MACD + Bollinger + per-type dedup
 - Code: `src/signals/lambda_function.py` – `ema_series`, `macd(12,26,9)`, `bollinger(20, 2, population σ)`; rules `MACD_CROSS`, `BOLLINGER_BREAK` (transition-only, `ENABLE_<TYPE>=false` switches a rule off); dedup per (symbol, trade_date, type) via conditional write on `alert_sent_<TYPE>`; only new alerts are returned.
@@ -45,7 +81,20 @@ Only verified facts are recorded here. Times are UTC unless marked ET (America/N
 - `stock-ingest` updated (DailyLimitError/RateLimitError split, `data_quality` jump check). Rollback point: `stock-ingest` version 1.
 - `stock-api`: allow-list = AAPL MSFT GOOGL AMZN NVDA; `/predictions*`, `/evaluation`, `/model-health` → 404 "no validated model" for non-AAPL; every 200 response has `model_status`. Live-checked by direct invocation (NVDA /predictions → 404, TSLA → 400).
 - Dashboard ticker selector; non-AAPL shows "Prices and signals only; no validated model"; AAPL shows "experimental, does not beat baseline". Headless smoke test `tests/dashboard.smoke.test.js` renders both.
-- Pending: switch state machine + schedule input after 19:00 ET, full test run (5 AV calls: 1 per ticker = backfill for the 4 new tickers).
+- **Switch (2026-10-15 23:01 UTC, 19:01 ET):** `bash infra/stepfunctions/switch-to-watchlist.sh`: snapshots saved (`stock-prediction-pipeline.pre-watchlist.asl.json`, `infra/scheduler/stock-daily-pipeline.pre-watchlist.json`), definition validated (OK) and updated, schedule updated (same cron/timezone/role/retries; input `{"symbols":["AAPL","MSFT","GOOGL","AMZN","NVDA"]}`; DLQ). Verified with `get-schedule`: ENABLED.
+- **Scheduled run before the switch** (2026-10-15 22:30 UTC, old definition, new ingest/signals code): SUCCEEDED; ingest `inserted 1, updated 1, unchanged 98`, `data_quality` 99 pairs checked, 0 jumps; prediction 337.7887 for as-of 2026-10-15 (inputs outside scaler range); signals computed incl. MACD 4.0223 / signal 3.8743, %B 0.8213, no rule fired; score `newly_scored 1, already_scored 8, pending 1`.
+- **Live tests after the switch:**
+  | Execution | Input | Result |
+  |---|---|---|
+  | `test-watchlist-20261015T230152` | 5 tickers | SUCCEEDED, 90 s. AAPL: `unchanged 99, updated 1`, prediction only for AAPL, score unchanged (`already_scored 9`). MSFT/GOOGL/AMZN/NVDA: `inserted 100` each (2026-05-26 → 2026-10-15). Jumps in window: 0 for all 5. New alert: NVDA `BOLLINGER_BREAK` (close 217.23 below lower band 217.58, %B −0.016). Digest email published, subject "Stock watchlist: NVDA BOLLINGER_BREAK". |
+  | `test-isolation-20261015T230353` | `["AAPL","ZZZZ"]` | SUCCEEDED. AAPL ok; ZZZZ `failed_step validate` ("not in the watchlist"). Email published, subject "Stock watchlist: 1 FAILED". The failed symbol appears JSON-quoted (`"ZZZZ"`) in the email: deliberate (`States.JsonToString`, so a non-string value cannot break the failure path). |
+  | `test-invalid-20261015T230433` | `{}` | FAILED (as designed) via InvalidInput → PublishFailure (task succeeded) → Fail. `stock-pipeline-failed-executions` went OK → ALARM at 23:05:49 UTC, SNS action succeeded (it returns to OK by itself; the 18:55 UTC `XYZ` run had done the same at 18:56:49 UTC). |
+  | `test-legacy-20261015T230444` | `{"symbol":"AAPL"}` | SUCCEEDED via LegacyInput; nothing new, digest `send false`, no email. |
+- API after the switch (direct invocation): NVDA `/prices` 200 (100 rows), `/signals` 200, `/alerts` shows the BOLLINGER_BREAK with `test_alert: true`, `/predictions/latest` 404 "no validated model"; AAPL `/predictions/latest` 200.
+- **Note on the NVDA alert:** it was emailed for real, by a test execution. Its dedup flag is set, so the scheduled run will not email it again; the API/dashboard label it "test run" because `alert_execution` starts with `test-`.
+- **Note on revised bars:** AAPL 2026-10-14 was `updated` at 22:30 UTC and 2026-10-15 at 23:01 UTC; the close of 2026-10-15 was 342.0 both times, so the score written at 22:30 is unaffected. The other fields do not show what changed (probably a late volume revision).
+- Fixed: `infra/stepfunctions/run_test.py` printed the prediction and signals columns swapped (summary only; the execution was unaffected).
+- Not tested live: a ticker failing inside a Lambda (covered by `tests/test_state_machine.py` structure tests and unit tests) and a real Alpha Vantage throttle (unit tests only, to save calls).
 
 ## Item 3 – Phase 8 item 4: retraining plan
 `docs/retraining-plan.md`. Nothing trained. Measured inputs (2026-10-15): of the last 60 real AAPL closes, 6 are above the scaler max $339.7869 and 34 are within 5% of it or above; walk-forward bias −$4.67 (n=19) when the last close was ≥ 95% of the max vs −$0.43 (n=21) otherwise — stated as a hypothesis only.
@@ -59,6 +108,7 @@ Only verified facts are recorded here. Times are UTC unless marked ET (America/N
 - SQS `stock-pipeline-dlq`: SSE-SQS on, retention 1,209,600 s (14 days), queue policy = SendMessage only from `stock-scheduler-role` + deny non-TLS.
 - `stock-scheduler-role` inline policy now also allows `sqs:SendMessage` on that queue only.
 - Alarms `stock-pipeline-dlq-not-empty` and `stock-pipeline-dlq-new-message` → SNS `stock-prediction-alerts`.
+- DLQ attached to `stock-daily-pipeline` at 2026-10-15 23:01 UTC (`DeadLetterConfig.Arn` = `stock-pipeline-dlq`, verified).
 - Test schedule `stock-test-dlq-20261015` (one-time, 2026-10-15 13:55 UTC, targets non-existent state machine `stock-dlq-test-does-not-exist`, 0 retries, ActionAfterCompletion NONE → inert afterwards). **Listed for your cleanup.**
 - **DLQ test result (2026-10-15):** the schedule fired at 13:55:00 UTC; Scheduler put 1 message in `stock-pipeline-dlq` (peeked with visibility timeout 0, not deleted): `ERROR_CODE AccessDeniedException` (scheduler role may only start `stock-prediction-pipeline`), `RETRY_ATTEMPTS 0`, `SCHEDULE_ARN …/stock-test-dlq-20261015`. `stock-pipeline-dlq-new-message` → ALARM, SNS action succeeded 13:57:13 UTC; `stock-pipeline-dlq-not-empty` → ALARM, SNS action succeeded 13:58:46 UTC. You should have received 2 ALARM emails. The test message stays until it expires (14 days, ~2026-10-29) or you purge the queue; until then `-not-empty` stays in ALARM (D9).
 

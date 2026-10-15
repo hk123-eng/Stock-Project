@@ -4,19 +4,23 @@
 1. **Create your login** (Cognito console → user pool `stock-dashboard-users` → Create user, with your email and a temporary password). Sign-up is admin-only by design.
 2. **Dashboard URL:** after CloudFront is unblocked and `infra/cloudfront/finish-cloudfront.sh` has run, use `https://<distribution>.cloudfront.net/`. Until then, run it locally:
    `cd dashboard && python -m http.server 8080`, then open `http://localhost:8080/` (registered as a Cognito callback).
-3. Confirm the SNS email subscription still works (you should have received test alerts on 2026-10-05).
+3. Confirm the SNS email subscription still works (test emails were sent on 2026-10-05 and 2026-10-15).
+4. Alpha Vantage budget: each 5-ticker run uses 5 of the 25 daily calls. Keep demo runs to one or two, and never run during US market hours (a provisional close would be scored).
 
 ## 10-minute demo flow
 | # | Show | Say |
 |---|---|---|
-| 1 | `docs/architecture.md` diagram | "Serverless pipeline in Mumbai: Scheduler → Step Functions → three Lambdas → DynamoDB/S3 → SNS, plus a Cognito-protected API and dashboard." |
-| 2 | EventBridge Scheduler → `stock-daily-pipeline` | "Runs Mon–Fri 18:30 New York time, after the US close, with an explicit `{"symbol":"AAPL"}`." |
-| 3 | Step Functions → start execution `{"symbol":"AAPL"}` → graph view | Each step turns green. Open the IngestPrices output: `rows_received 100, unchanged 100`, which shows idempotency. |
+| 1 | `docs/architecture.md` diagram | "Serverless pipeline in Mumbai: Scheduler → Step Functions (a Map over a 5-ticker watchlist) → five Lambdas → DynamoDB/S3 → one combined SNS email, plus a Cognito-protected API and dashboard." |
+| 2 | EventBridge Scheduler → `stock-daily-pipeline` | "Runs Mon–Fri 18:30 New York time, after the US close, with input `{"symbols":["AAPL","MSFT","GOOGL","AMZN","NVDA"]}`; failed starts go to the SQS dead-letter queue." |
+| 3 | Step Functions → open the latest scheduled execution (or start one with `{"symbols":["AAPL","NVDA"]}` = 2 API calls) → graph view | The Map runs one ticker at a time with a 15 s pause. Open an IngestPrices output: `unchanged 100` shows idempotency; `data_quality` shows the split/jump check. Only AAPL goes through Predict. |
+| 3b | Start an execution with `{"symbols":["AAPL","ZZZZ"]}` | AAPL is processed; ZZZZ fails alone; the run SUCCEEDS and the email subject says "1 FAILED". |
 | 4 | Start an execution with `{}` | Goes ValidateInput → InvalidInput → PublishFailure; show the failure email. "Before, this was an unhandled `States.Runtime` error with no alert." |
 | 5 | CloudWatch → Alarms → `stock-pipeline-failed-executions` | "Safety net: any failed, timed-out or aborted run alerts by email, even errors the workflow can't catch." |
 | 6 | DynamoDB → `stock-prices` → query AAPL | Point out `source=alphavantage`, `data_type=real`, Number types, and the legacy synthetic rows with no `source` that are ignored everywhere. |
 | 7 | S3 `raw/alphavantage/…` | "Raw API responses archived for audit; the API key is never stored or logged." |
-| 8 | Dashboard → sign in (Cognito hosted UI) | Latest close, prediction (with out-of-range warning), signals, alerts, prediction history. |
+| 8 | Dashboard → sign in (Cognito hosted UI) | Latest close, prediction (with out-of-range warning, labelled experimental), signals incl. MACD and Bollinger %B, alerts, prediction history. Tick "Show Bollinger bands". |
+| 8b | Ticker selector → NVDA | "Prices and signals only; no validated model": the prediction panels are hidden and the API returns 404 for model routes. |
+| 8c | CloudWatch → Dashboards → `stock-project` | Executions, tickers processed/failed, DLQ depth, Lambda errors, API traffic, AAPL model vs naive error. |
 | 9 | Toggle "Show legacy synthetic rows" | The dashed grey series is labelled SYNTHETIC; it's off by default. |
 | 10 | Model evaluation card / `docs/model-evaluation.md` | "Honest result: the LSTM's MAE is $6.18 vs $3.33 for the naive baseline. It does not beat 'tomorrow = today'." |
 | 11 | `curl` the API with no token → 401 | "Every route needs a Cognito JWT." |
@@ -30,7 +34,19 @@ The workload runs once a day for seconds. Lambda, Step Functions, DynamoDB on-de
 Visible per-step state, built-in retries and catches, a failure path that always alerts, an execution history for auditing, and each Lambda keeps its own least-privilege role.
 
 **Q: How do you stop duplicate data?**
-Rows are keyed by (symbol, US close time in UTC); ingestion skips identical rows and uses a conditional put. Predictions are keyed by (symbol, as_of_date). Alerts use a conditional write on `alert_sent_at`, so at most one email per trading day.
+Rows are keyed by (symbol, US close time in UTC); ingestion skips identical rows and uses a conditional put. Predictions are keyed by (symbol, as_of_date). Each alert type has its own conditional flag `alert_sent_<TYPE>` per (symbol, trading day), so a rule is emailed at most once, and two different rules on the same day both get reported. All new alerts of a run go into ONE email.
+
+**Q: Why a Map with MaxConcurrency 1?**
+The Alpha Vantage free tier allows 25 calls per day and throttles bursts. Five tickers sequentially with a 15 s gap use 5 calls and never burst. A throttle comes back as HTTP 200 with a "Note"/"Information" message; the code turns the daily-quota message into `DailyLimitError` (never retried) and others into `RateLimitError` (1 retry after 60 s).
+
+**Q: What if one ticker fails?**
+Each ticker has its own Catch. The other tickers continue, the run still succeeds, and the single digest email lists the failed ticker (tested live with `["AAPL","ZZZZ"]`). A failure of the whole run (bad input, digest or SNS error) still fails the execution and triggers the alarm.
+
+**Q: Why only AAPL predictions?**
+The LSTM was trained on AAPL only and does not beat a naive baseline even there. Running it on other tickers would produce numbers with no validation, so the other tickers get prices and signals only.
+
+**Q: Prices are unadjusted. What about stock splits?**
+Ingestion flags any day-over-day close change of 25% or more as a possible split and reports it in the email; if new AAPL data contains one, that run skips the prediction. History is not adjusted (the adjusted endpoint is premium-only). On 2026-10-15 no ticker had such a jump in its 100-day window.
 
 **Q: What about the synthetic data from the prototype?**
 It was kept (nothing is deleted) but isolated. Real rows are tagged `source=alphavantage`; every reader (inference, signals, API) filters on that tag. The real sort-key times (20:00Z/21:00Z) can't collide with the synthetic ones, and writes refuse to overwrite a non-Alpha-Vantage row. The dashboard only shows synthetic rows on request, labelled SYNTHETIC.
@@ -54,10 +70,13 @@ Measured on 40 real trading days: MAE $6.18, RMSE $7.03, MAPE 1.91%, directional
 The project is about the cloud ML pipeline (deployment, scheduling, persistence, monitoring, evaluation). The pipeline measures and publishes the model's real error, which is how you'd detect a weak model in production. Retraining is the documented next step.
 
 **Q: Limitations?**
-Alpha Vantage free tier: unadjusted prices, 100 trading days, 25 requests per day. Single symbol (AAPL). US holidays aren't modelled (runs are harmless no-ops). Step Functions execution logging is off (missing permission). CloudFront is pending. Evaluation sample is small (40 points).
+Alpha Vantage free tier: unadjusted prices, 100 trading days, 25 requests per day (5 used per run). Predictions for AAPL only, and the model does not beat the naive baseline. Splits are detected, not corrected. US holidays aren't modelled (runs are harmless no-ops). Step Functions execution logging, Athena, X-Ray and an EventBridge bus are not set up (missing permissions). CloudFront is pending. Evaluation samples are small (40 backtest points; 9 live scored days as of 2026-10-15). CI exists but has never run on GitHub (no remote yet).
 
 **Q: What does it cost?**
 Expected $0.00/month inside free tiers; worst case without free tiers is well under $0.50/month at this usage. A $1 zero-spend budget alert exists.
 
 **Q: What happens if Alpha Vantage is down or rate-limited?**
-The ingest Lambda raises a sanitized `IngestError`. Step Functions retries once after 60 s, then publishes a failure alert, and the CloudWatch alarm also fires. Existing data is untouched; the next scheduled run catches up because each call returns the last 100 days.
+The ingest Lambda raises a sanitized `IngestError` or `RateLimitError`; Step Functions retries once after 60 s. If it still fails, only that ticker is marked failed and the digest email says so (a daily-quota error is not retried). Existing data is untouched; the next scheduled run catches up because each call returns the last 100 days.
+
+**Q: What if the scheduler itself cannot start the pipeline?**
+EventBridge Scheduler retries twice within an hour, then puts the event into the SQS dead-letter queue `stock-pipeline-dlq`; two CloudWatch alarms email on it. This was tested with a one-time schedule pointing at a non-existent state machine.
