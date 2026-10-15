@@ -1,4 +1,5 @@
 """Offline unit tests for the model-health summary in the API."""
+import json
 import os
 import sys
 import unittest
@@ -49,6 +50,39 @@ class TestAlerts(unittest.TestCase):
         self.assertTrue(out[0]["test_alert"])
         self.assertEqual(out[1]["notified_types"], ["BIG_MOVE", "MACD_CROSS"])
         self.assertFalse(out[1]["test_alert"])
+
+
+def ev(path, symbol=None):
+    e = {"rawPath": path, "requestContext": {"http": {"method": "GET"}}}
+    if symbol:
+        e["queryStringParameters"] = {"symbol": symbol}
+    return e
+
+
+class TestWatchlistRouting(unittest.TestCase):
+    def test_allow_list(self):
+        r = api.lambda_handler(ev("/prices", "TSLA"), None)
+        self.assertEqual(r["statusCode"], 400)
+        self.assertEqual(sorted(api.SYMBOLS), ["AAPL", "AMZN", "GOOGL", "MSFT", "NVDA"])
+
+    def test_model_routes_404_without_model(self):
+        for route in ("/predictions", "/predictions/latest", "/evaluation", "/model-health"):
+            r = api.lambda_handler(ev(route, "nvda"), None)
+            self.assertEqual(r["statusCode"], 404, route)
+            body = json.loads(r["body"])
+            self.assertEqual(body["error"], "no validated model")
+            self.assertEqual(body["note"], "Prices and signals only; no validated model")
+
+    def test_non_model_prices_ok_and_labelled(self):
+        with mock.patch.object(api, "_real_prices", return_value=[{"trade_date": "d1", "close": 1}]),                 mock.patch.object(api, "_count_synthetic", return_value=0):
+            r = api.lambda_handler(ev("/prices", "MSFT"), None)
+        self.assertEqual(r["statusCode"], 200)
+        self.assertEqual(json.loads(r["body"])["model_status"], "Prices and signals only; no validated model")
+
+    def test_aapl_labelled_experimental(self):
+        with mock.patch.object(api, "_query_all", return_value=[]), mock.patch.object(api, "_real_prices", return_value=[]):
+            r = api.lambda_handler(ev("/predictions", "AAPL"), None)
+        self.assertEqual(json.loads(r["body"])["model_status"], "experimental, does not beat baseline")
 
 
 if __name__ == "__main__":

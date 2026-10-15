@@ -6,5 +6,7 @@ window.STOCK_CONFIG = {
   apiBase: "https://sjdmkf8iag.execute-api.ap-south-1.amazonaws.com",
   // Must exactly match a callback URL registered on the Cognito app client.
   redirectUri: window.location.origin + "/",
-  symbol: "AAPL",
+  symbol: "AAPL",  // default ticker
+  watchlist: ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA"],
+  modelSymbols: ["AAPL"],  // only these have an (experimental) model
 };

@@ -11,7 +11,9 @@ GET /evaluation          latest model evaluation report (S3 predictions/evaluati
 GET /model-health        live scored predictions (stored by stock-evaluate) vs the naive baseline;
                          verdict is "insufficient data" until 20 days are scored
 
-Query parameters: symbol (default AAPL, allow-listed), limit (1-500).
+Query parameters: symbol (default AAPL; allow-listed watchlist AAPL MSFT GOOGL AMZN NVDA), limit (1-500).
+Only MODEL_SYMBOLS (AAPL) have a model: the prediction/evaluation/model-health routes return
+404 "no validated model" for the other tickers (prices and signals only).
 """
 import json
 import os
@@ -25,7 +27,12 @@ PRICES_TABLE = os.environ.get("PRICES_TABLE", "stock-prices")
 PREDICTIONS_TABLE = os.environ.get("PREDICTIONS_TABLE", "stock-predictions")
 SIGNALS_TABLE = os.environ.get("SIGNALS_TABLE", "stock-signals")
 BUCKET = os.environ.get("BUCKET", "stock-prediction-raw-542601847637-ap-south-1-an")
-SYMBOLS = {"AAPL"}
+WATCHLIST = ("AAPL", "MSFT", "GOOGL", "AMZN", "NVDA")
+SYMBOLS = set(WATCHLIST)
+MODEL_SYMBOLS = {"AAPL"}  # experimental LSTM; does not beat the naive baseline
+MODEL_ROUTES = {"/predictions", "/predictions/latest", "/evaluation", "/model-health"}
+MODEL_LABEL = "experimental, does not beat baseline"
+NO_MODEL_NOTE = "Prices and signals only; no validated model"
 MIN_SCORED_DAYS = 20  # no beats/does-not-beat verdict below this many live scored days
 REAL_SOURCE = "alphavantage"
 DATA_NOTE = ("Real daily prices from Alpha Vantage TIME_SERIES_DAILY (compact: latest 100 trading days). "
@@ -229,7 +236,13 @@ def lambda_handler(event, context):
         return _resp(400, {"error": "limit must be an integer"})
     if not 1 <= limit <= 500:
         return _resp(400, {"error": "limit must be 1-500"})
+    route = path.rstrip("/") or "/"
+    if route in MODEL_ROUTES and symbol not in MODEL_SYMBOLS:
+        return _resp(404, {"error": "no validated model", "symbol": symbol, "note": NO_MODEL_NOTE,
+                           "model_symbols": sorted(MODEL_SYMBOLS)})
     body = handler(symbol, limit)
     if body is None:
         return _resp(404, {"error": "no data yet", "symbol": symbol})
+    if isinstance(body, dict):
+        body["model_status"] = MODEL_LABEL if symbol in MODEL_SYMBOLS else NO_MODEL_NOTE
     return _resp(200, body)

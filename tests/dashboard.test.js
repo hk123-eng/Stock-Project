@@ -68,3 +68,11 @@ assert.match(alertNote({ notified: true, test_alert: true }), /test run/);
 assert.match(alertNote({ notified: true, test_alert: false }), /emailed/);
 assert.equal(alertNote({ notified: false }), "");
 console.log("dashboard alert-label tests: all passed");
+
+// ---- Phase 8 item 3: watchlist ----
+const { tickerView } = require("../dashboard/app.js");
+assert.deepEqual(tickerView("AAPL", ["AAPL"]), { symbol: "AAPL", hasModel: true, label: "LSTM prediction: experimental, does not beat baseline" });
+assert.equal(tickerView("NVDA", ["AAPL"]).hasModel, false);
+assert.equal(tickerView("NVDA", ["AAPL"]).label, "Prices and signals only; no validated model");
+assert.equal(tickerView("MSFT", undefined).hasModel, false);
+console.log("dashboard watchlist tests: all passed");

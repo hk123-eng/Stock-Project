@@ -67,3 +67,31 @@ class TestParse(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestThrottleAndQuality(unittest.TestCase):
+    def test_daily_limit_vs_burst(self):
+        daily = {"Information": "Thank you for using Alpha Vantage! Our standard API rate limit is 25 requests per day."}
+        with self.assertRaises(ing.DailyLimitError):
+            ing.parse_daily(daily, "AAPL")
+        burst = {"Information": "Please consider spreading out your free API requests more sparingly (1 request per second)."}
+        with self.assertRaises(ing.RateLimitError) as ctx:
+            ing.parse_daily(burst, "AAPL")
+        self.assertNotIsInstance(ctx.exception, ing.DailyLimitError)
+        with self.assertRaises(ing.RateLimitError):
+            ing.parse_daily({"Note": "API call frequency is 5 calls per minute."}, "AAPL")
+
+    def test_jumps_and_split_hints(self):
+        rows = [{"trade_date": d, "close": c} for d, c in
+                [("d1", 400.0), ("d2", 404.0), ("d3", 101.0), ("d4", 100.0), ("d5", 130.0)]]
+        j = ing.suspicious_jumps(rows, changed_dates={"d5"}, threshold_pct=25)
+        # d2->d3: 101/404 = 0.25 -> -75%, 4-for-1 split; d4->d5: +30%, no split ratio
+        self.assertEqual([x["trade_date"] for x in j], ["d3", "d5"])
+        self.assertEqual(j[0]["change_pct"], -75.0)
+        self.assertEqual(j[0]["split_hint"], "4-for-1 split?")
+        self.assertFalse(j[0]["new"])
+        self.assertIsNone(j[1]["split_hint"])
+        self.assertTrue(j[1]["new"])
+        self.assertEqual(ing.suspicious_jumps(rows[:2], threshold_pct=25), [])
+        rev = ing.suspicious_jumps([{"trade_date": "a", "close": 10.0}, {"trade_date": "b", "close": 100.0}], threshold_pct=25)
+        self.assertEqual(rev[0]["split_hint"], "1-for-10 reverse split?")

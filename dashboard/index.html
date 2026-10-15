@@ -14,10 +14,12 @@
 <body>
   <header>
     <div>
-      <h1>AAPL stock monitor</h1>
+      <h1>Stock watchlist monitor</h1>
       <p class="small">Cloud Computing + ML college project · real data from Alpha Vantage · not financial advice</p>
     </div>
     <div class="actions" id="actions" hidden>
+      <label class="toggle" for="ticker">Ticker</label>
+      <select id="ticker" aria-label="Ticker"></select>
       <button id="refresh-btn" type="button">Refresh</button>
       <button id="logout-btn" type="button" class="secondary">Sign out</button>
     </div>
@@ -33,13 +35,14 @@
 
     <div id="app" hidden>
       <p id="status" class="small"></p>
+      <p id="model-note" class="small"></p>
       <div class="grid kpis">
         <section class="card">
           <h2>Latest close</h2>
           <p class="kpi" id="price">—</p>
           <p class="small" id="price-sub"></p>
         </section>
-        <section class="card">
+        <section class="card model-only">
           <h2>LSTM next-day prediction</h2>
           <p class="kpi" id="pred">—</p>
           <p class="small" id="pred-sub"></p>
@@ -59,13 +62,13 @@
             <label class="toggle"><input type="checkbox" id="show-synthetic"> Show legacy synthetic rows</label>
           </span>
         </div>
-        <div class="chart-box"><canvas id="price-chart" aria-label="AAPL closing price chart"></canvas></div>
+        <div class="chart-box"><canvas id="price-chart" aria-label="Closing price chart"></canvas></div>
         <p class="warn" id="synthetic-note" hidden>The dashed grey line is SYNTHETIC test data created during the prototype phase. It is NOT real market data and is not used by the model, signals or alerts.</p>
         <p class="small" id="data-note"></p>
       </section>
 
       <div class="grid two">
-        <section class="card">
+        <section class="card model-only">
           <h2>Model evaluation (real prices)</h2>
           <div id="eval"></div>
         </section>
@@ -75,13 +78,13 @@
         </section>
       </div>
 
-      <section class="card">
+      <section class="card model-only">
         <h2>Model health (live predictions vs naive baseline)</h2>
         <div id="health"></div>
         <div class="chart-box short"><canvas id="health-chart" aria-label="Absolute error per scored day, LSTM vs naive baseline"></canvas></div>
       </section>
 
-      <section class="card">
+      <section class="card model-only">
         <h2>Prediction history</h2>
         <div class="table-wrap">
           <table>

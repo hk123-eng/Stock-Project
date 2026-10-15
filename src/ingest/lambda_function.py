@@ -8,6 +8,17 @@ Security: the API key travels in the request URL (Alpha Vantage requires the
 `apikey` query parameter). The URL is never logged, returned or stored, and
 errors are re-raised with sanitized messages only.
 
+Throttling: Alpha Vantage reports limits with HTTP 200 and a "Note"/"Information"
+message instead of data. The per-day quota (25/day on the free key) raises
+DailyLimitError, which the pipeline does NOT retry (a retry would only waste the
+quota); any other limit message (e.g. requests too close together) raises
+RateLimitError, which the pipeline retries once after 60 s.
+
+Data quality: prices are UNADJUSTED, so a stock split shows up as a sudden jump.
+Every day-over-day close change of at least JUMP_PCT (default 25%) is reported
+in `data_quality`; jumps on rows inserted/updated by this run are "new" and the
+pipeline skips the model prediction for that ticker when there are any.
+
 Coexistence with legacy synthetic rows: every real row carries
 source="alphavantage" and data_type="real". Its sort key is the US market close
 time in UTC (20:00Z or 21:00Z), which never matches the synthetic rows'
@@ -34,6 +45,9 @@ API_BASE = "https://www.alphavantage.co/query"
 SOURCE = "alphavantage"
 SYMBOL_RE = re.compile(r"^[A-Z]{1,5}$")
 HTTP_TIMEOUT = 15
+JUMP_PCT = float(os.environ.get("JUMP_PCT", "25"))
+# common split ratios (old shares -> new shares); a reverse split gives the inverse
+SPLIT_FACTORS = (2, 3, 4, 5, 8, 10, 15, 20, 1.5)
 
 
 class IngestError(Exception):
@@ -41,7 +55,42 @@ class IngestError(Exception):
 
 
 class RateLimitError(IngestError):
-    pass
+    """Throttled by Alpha Vantage (HTTP 200 with a Note/Information message). Retried once."""
+
+
+class DailyLimitError(RateLimitError):
+    """The daily request quota is used up. Not retried."""
+
+
+def _limit_error(kind, message):
+    text = f"Alpha Vantage {kind}: {str(message)[:200]}"
+    low = str(message).lower()
+    if "per day" in low or "daily" in low:
+        return DailyLimitError(text)
+    return RateLimitError(text)
+
+
+def _split_hint(ratio):
+    for f in SPLIT_FACTORS:
+        if abs(ratio * f - 1) <= 0.03:
+            return f"{f:g}-for-1 split?"
+        if abs(ratio / f - 1) <= 0.03:
+            return f"1-for-{f:g} reverse split?"
+    return None
+
+
+def suspicious_jumps(rows, changed_dates=(), threshold_pct=None):
+    """Day-over-day close changes >= threshold_pct (rows oldest first)."""
+    threshold = JUMP_PCT if threshold_pct is None else threshold_pct
+    out = []
+    for prev, cur in zip(rows, rows[1:]):
+        ratio = float(cur["close"]) / float(prev["close"])
+        if abs(ratio - 1) * 100 >= threshold:
+            out.append({"trade_date": cur["trade_date"], "prev_trade_date": prev["trade_date"],
+                        "prev_close": float(prev["close"]), "close": float(cur["close"]),
+                        "change_pct": round((ratio - 1) * 100, 2), "split_hint": _split_hint(ratio),
+                        "new": cur["trade_date"] in changed_dates or prev["trade_date"] in changed_dates})
+    return out
 
 
 def us_close_utc(trade_date):
@@ -76,7 +125,7 @@ def parse_daily(payload, symbol):
     for k in ("Note", "Information"):
         if k in payload and "Time Series (Daily)" not in payload:
             # Free tier: 25 requests/day. The message text is safe (no key in it).
-            raise RateLimitError(f"Alpha Vantage {k}: {str(payload[k])[:200]}")
+            raise _limit_error(k, payload[k])
     if "Error Message" in payload:
         raise IngestError(f"Alpha Vantage error: {str(payload['Error Message'])[:200]}")
     meta = payload.get("Meta Data") or {}
@@ -181,6 +230,7 @@ def lambda_handler(event, context):
     table = boto3.resource("dynamodb").Table(TABLE_NAME)
     existing = _existing_real_rows(table, symbol)
     inserted = updated = unchanged = 0
+    changed = set()
     for r in rows:
         old = existing.get(r["timestamp"])
         if _same(r, old):
@@ -199,6 +249,7 @@ def lambda_handler(event, context):
             if e.response["Error"]["Code"] == "ConditionalCheckFailedException":
                 raise IngestError(f"refused to overwrite non-Alpha-Vantage row {r['timestamp']}") from None
             raise
+        changed.add(r["trade_date"])
         if old is None:
             inserted += 1
         else:
@@ -216,6 +267,14 @@ def lambda_handler(event, context):
         "latest_trade_date": latest,
         "latest_close": float(rows[-1]["close"]),
         "raw_s3_key": raw_key,
+    }
+    jumps = suspicious_jumps(rows, changed)
+    result["data_quality"] = {
+        "check": f"day-over-day close change >= {JUMP_PCT:g}% (prices are unadjusted; a split looks like a jump)",
+        "pairs_checked": max(len(rows) - 1, 0),
+        "jumps_in_window": len(jumps),
+        "new_jumps_count": sum(1 for j in jumps if j["new"]),
+        "jumps": jumps[-10:],
     }
     print(json.dumps(result))
     return result

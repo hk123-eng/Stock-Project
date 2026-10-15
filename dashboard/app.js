@@ -79,6 +79,16 @@
     ];
   }
 
+  // Which panels a ticker gets: only model symbols have predictions (experimental, does not beat baseline).
+  function tickerView(symbol, modelSymbols) {
+    const hasModel = (modelSymbols || []).includes(symbol);
+    return {
+      symbol, hasModel,
+      label: hasModel ? "LSTM prediction: experimental, does not beat baseline"
+        : "Prices and signals only; no validated model",
+    };
+  }
+
   function alertNote(a) {
     if (a.test_alert) return ' <span class="small">(test run, not a production alert)</span>';
     return a.notified ? ' <span class="small">(emailed)</span>' : "";
@@ -89,7 +99,7 @@
   }
 
   if (typeof module !== "undefined") {
-    module.exports = { fmt, buildSeries, evaluationSummary, healthView, bollingerSeries, signalRows, alertNote, escapeHtml };
+    module.exports = { fmt, buildSeries, evaluationSummary, healthView, bollingerSeries, signalRows, alertNote, tickerView, escapeHtml };
     return;
   }
 
@@ -97,11 +107,12 @@
   const C = root.STOCK_CONFIG;
   const $ = (id) => document.getElementById(id);
   let chart, healthChart, state = {};
+  let symbol = C && C.symbol;
 
   async function api(path) {
     const t = root.StockAuth.token();
     if (!t) throw Object.assign(new Error("Signed out"), { auth: true });
-    const r = await fetch(`${C.apiBase}${path}${path.includes("?") ? "&" : "?"}symbol=${C.symbol}`, {
+    const r = await fetch(`${C.apiBase}${path}${path.includes("?") ? "&" : "?"}symbol=${encodeURIComponent(symbol)}`, {
       headers: { Authorization: `Bearer ${t}` },
     });
     if (r.status === 401) throw Object.assign(new Error("Session expired"), { auth: true });
@@ -117,7 +128,7 @@
     const s = buildSeries(state.prices.prices, state.predictions ? state.predictions.predictions : [],
       showSyn && state.synthetic ? state.synthetic.prices : []);
     const datasets = [
-      { label: "AAPL close (real, Alpha Vantage, unadjusted)", data: s.real, borderColor: cssVar("--series-1"),
+      { label: `${symbol} close (real, Alpha Vantage, unadjusted)`, data: s.real, borderColor: cssVar("--series-1"),
         backgroundColor: cssVar("--series-1"), borderWidth: 2, pointRadius: 0, tension: 0.15 },
       { label: "LSTM prediction (next close)", data: s.preds, borderColor: cssVar("--series-2"),
         backgroundColor: cssVar("--series-2"), showLine: false, pointRadius: 5, pointStyle: "rectRot" },
@@ -188,6 +199,12 @@
     $("price-sub").innerHTML = `<span class="${chg >= 0 ? "up" : "down"}">${fmt.pct(chg)}</span> · close of ${escapeHtml(lp.trade_date)}`;
     $("data-note").textContent = state.prices.note + ` ${state.prices.synthetic_rows_excluded} legacy synthetic rows exist in the table and are excluded.`;
 
+    const tv = tickerView(symbol, C.modelSymbols);
+    document.querySelectorAll(".model-only").forEach((el) => { el.hidden = !tv.hasModel; });
+    $("model-note").textContent = tv.label;
+    $("model-note").className = tv.hasModel ? "warn" : "small";
+    $("pred").textContent = "—"; $("pred-sub").textContent = ""; $("pred-warn").hidden = true;
+    $("signals").innerHTML = "<p>No signals yet.</p>";
     const p = state.latestPrediction && state.latestPrediction.prediction;
     if (p) {
       $("pred").textContent = fmt.money(p.predicted_close);
@@ -225,12 +242,14 @@
 
   async function load() {
     $("status").textContent = "Loading…";
+    const hasModel = tickerView(symbol, C.modelSymbols).hasModel;
+    const model = (path) => (hasModel ? api(path) : Promise.resolve(null));  // no model routes for other tickers
     const [prices, latest, latestPrediction, predictions, signals, alerts, evaluation, synthetic, modelHealth] = await Promise.all([
-      api("/prices?limit=100"), api("/prices/latest"), api("/predictions/latest"), api("/predictions?limit=100"),
-      api("/signals?limit=1"), api("/alerts?limit=20"), api("/evaluation"), api("/prices/synthetic?limit=500"),
-      api("/model-health?limit=100"),
+      api("/prices?limit=100"), api("/prices/latest"), model("/predictions/latest"), model("/predictions?limit=100"),
+      api("/signals?limit=1"), api("/alerts?limit=20"), model("/evaluation"), api("/prices/synthetic?limit=500"),
+      model("/model-health?limit=100"),
     ]);
-    if (!prices || !latest) throw new Error("No real price data available yet.");
+    if (!prices || !latest) throw new Error(`No real price data for ${symbol} yet.`);
     state = { prices, latest, latestPrediction, predictions, signals, alerts, evaluation, synthetic, modelHealth };
     render();
     $("status").textContent = `Signed in as ${root.StockAuth.user() || "user"} · loaded ${new Date().toLocaleString()}`;
@@ -245,6 +264,11 @@
     $("login-btn").onclick = () => root.StockAuth.login();
     $("logout-btn").onclick = () => root.StockAuth.logout();
     $("refresh-btn").onclick = () => load().catch(showError);
+    const sel = $("ticker");
+    sel.innerHTML = C.watchlist.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}${
+      C.modelSymbols.includes(t) ? "" : " (no model)"}</option>`).join("");
+    sel.value = symbol;
+    sel.onchange = () => { symbol = sel.value; load().catch(showError); };
     $("show-synthetic").onchange = () => state.prices && renderChart();
     $("show-bands").onchange = () => state.prices && renderChart();
     try {
