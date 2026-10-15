@@ -1,0 +1,12 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "SchedulerDeadLetterOnly", "Effect": "Allow",
+     "Principal": {"AWS": "arn:aws:iam::542601847637:role/stock-scheduler-role"},
+     "Action": "sqs:SendMessage",
+     "Resource": "arn:aws:sqs:ap-south-1:542601847637:stock-pipeline-dlq"},
+    {"Sid": "DenyInsecureTransport", "Effect": "Deny", "Principal": "*", "Action": "sqs:*",
+     "Resource": "arn:aws:sqs:ap-south-1:542601847637:stock-pipeline-dlq",
+     "Condition": {"Bool": {"aws:SecureTransport": "false"}}}
+  ]
+}

@@ -1,1 +1,4 @@
-{"Version":"2012-10-17","Statement":[{"Sid":"StartPipelineOnly","Effect":"Allow","Action":"states:StartExecution","Resource":"arn:aws:states:ap-south-1:542601847637:stateMachine:stock-prediction-pipeline"}]}
+{"Version":"2012-10-17","Statement":[
+  {"Sid":"StartPipelineOnly","Effect":"Allow","Action":"states:StartExecution","Resource":"arn:aws:states:ap-south-1:542601847637:stateMachine:stock-prediction-pipeline"},
+  {"Sid":"DeadLetterQueueOnly","Effect":"Allow","Action":"sqs:SendMessage","Resource":"arn:aws:sqs:ap-south-1:542601847637:stock-pipeline-dlq"}
+]}

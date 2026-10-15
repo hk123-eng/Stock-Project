@@ -1,0 +1,18 @@
+{
+  "AlarmName": "stock-pipeline-dlq-new-message",
+  "AlarmDescription": "A NEW message was sent to SQS stock-pipeline-dlq in the last 5 minutes (EventBridge Scheduler could not start the pipeline). Unlike stock-pipeline-dlq-not-empty, this returns to OK by itself, so it notifies again for every new failure even while old messages are still in the queue.",
+  "ActionsEnabled": true,
+  "AlarmActions": ["arn:aws:sns:ap-south-1:542601847637:stock-prediction-alerts"],
+  "OKActions": [],
+  "Namespace": "AWS/SQS",
+  "MetricName": "NumberOfMessagesSent",
+  "Dimensions": [{"Name": "QueueName", "Value": "stock-pipeline-dlq"}],
+  "Statistic": "Sum",
+  "Period": 300,
+  "EvaluationPeriods": 1,
+  "DatapointsToAlarm": 1,
+  "Threshold": 1,
+  "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+  "TreatMissingData": "notBreaching",
+  "Tags": [{"Key": "project", "Value": "stock-prediction"}]
+}

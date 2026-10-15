@@ -1,0 +1,18 @@
+{
+  "AlarmName": "stock-pipeline-dlq-not-empty",
+  "AlarmDescription": "EventBridge Scheduler could not start stock-prediction-pipeline (after its retries) and put the event in SQS stock-pipeline-dlq. Notifies SNS stock-prediction-alerts. Inspect the message, fix the cause, then purge/delete it manually.",
+  "ActionsEnabled": true,
+  "AlarmActions": ["arn:aws:sns:ap-south-1:542601847637:stock-prediction-alerts"],
+  "OKActions": [],
+  "Namespace": "AWS/SQS",
+  "MetricName": "ApproximateNumberOfMessagesVisible",
+  "Dimensions": [{"Name": "QueueName", "Value": "stock-pipeline-dlq"}],
+  "Statistic": "Maximum",
+  "Period": 300,
+  "EvaluationPeriods": 1,
+  "DatapointsToAlarm": 1,
+  "Threshold": 1,
+  "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+  "TreatMissingData": "notBreaching",
+  "Tags": [{"Key": "project", "Value": "stock-prediction"}]
+}

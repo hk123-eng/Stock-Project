@@ -1,0 +1,388 @@
+{
+ "start": "-P30D",
+ "periodOverride": "inherit",
+ "widgets": [
+  {
+   "type": "text",
+   "x": 0,
+   "y": 0,
+   "width": 24,
+   "height": 2,
+   "properties": {
+    "markdown": "## stock-project (ap-south-1)\nDaily watchlist pipeline AAPL MSFT GOOGL AMZN NVDA on real, unadjusted Alpha Vantage prices. Only AAPL has a model: **experimental, does not beat the naive baseline**. Model-health metrics come from live scored predictions only; no verdict below 20 scored days (see GET /model-health). Legacy synthetic rows are never used."
+   }
+  },
+  {
+   "type": "metric",
+   "x": 0,
+   "y": 2,
+   "width": 8,
+   "height": 6,
+   "properties": {
+    "title": "Step Functions executions (daily)",
+    "region": "ap-south-1",
+    "metrics": [
+     [
+      "AWS/States",
+      "ExecutionsSucceeded",
+      "StateMachineArn",
+      "arn:aws:states:ap-south-1:542601847637:stateMachine:stock-prediction-pipeline"
+     ],
+     [
+      "AWS/States",
+      "ExecutionsFailed",
+      "StateMachineArn",
+      "arn:aws:states:ap-south-1:542601847637:stateMachine:stock-prediction-pipeline"
+     ],
+     [
+      "AWS/States",
+      "ExecutionsTimedOut",
+      "StateMachineArn",
+      "arn:aws:states:ap-south-1:542601847637:stateMachine:stock-prediction-pipeline"
+     ]
+    ],
+    "stat": "Sum",
+    "period": 86400,
+    "view": "timeSeries"
+   }
+  },
+  {
+   "type": "metric",
+   "x": 8,
+   "y": 2,
+   "width": 8,
+   "height": 6,
+   "properties": {
+    "title": "Watchlist tickers per run (StockProject/Pipeline)",
+    "region": "ap-south-1",
+    "metrics": [
+     [
+      "StockProject/Pipeline",
+      "TickersProcessed"
+     ],
+     [
+      ".",
+      "TickerFailures"
+     ]
+    ],
+    "stat": "Maximum",
+    "period": 86400,
+    "view": "timeSeries"
+   }
+  },
+  {
+   "type": "metric",
+   "x": 16,
+   "y": 2,
+   "width": 8,
+   "height": 6,
+   "properties": {
+    "title": "Scheduler DLQ depth (stock-pipeline-dlq)",
+    "region": "ap-south-1",
+    "metrics": [
+     [
+      "AWS/SQS",
+      "ApproximateNumberOfMessagesVisible",
+      "QueueName",
+      "stock-pipeline-dlq"
+     ]
+    ],
+    "stat": "Maximum",
+    "period": 300,
+    "view": "timeSeries"
+   }
+  },
+  {
+   "type": "metric",
+   "x": 0,
+   "y": 8,
+   "width": 8,
+   "height": 6,
+   "properties": {
+    "title": "Lambda errors",
+    "region": "ap-south-1",
+    "metrics": [
+     [
+      "AWS/Lambda",
+      "Errors",
+      "FunctionName",
+      "stock-ingest"
+     ],
+     [
+      "AWS/Lambda",
+      "Errors",
+      "FunctionName",
+      "stock-lstm-inference"
+     ],
+     [
+      "AWS/Lambda",
+      "Errors",
+      "FunctionName",
+      "stock-signals"
+     ],
+     [
+      "AWS/Lambda",
+      "Errors",
+      "FunctionName",
+      "stock-evaluate"
+     ],
+     [
+      "AWS/Lambda",
+      "Errors",
+      "FunctionName",
+      "stock-alert-digest"
+     ],
+     [
+      "AWS/Lambda",
+      "Errors",
+      "FunctionName",
+      "stock-api"
+     ]
+    ],
+    "stat": "Sum",
+    "period": 86400,
+    "view": "timeSeries"
+   }
+  },
+  {
+   "type": "metric",
+   "x": 8,
+   "y": 8,
+   "width": 8,
+   "height": 6,
+   "properties": {
+    "title": "Lambda duration (max ms)",
+    "region": "ap-south-1",
+    "metrics": [
+     [
+      "AWS/Lambda",
+      "Duration",
+      "FunctionName",
+      "stock-ingest"
+     ],
+     [
+      "AWS/Lambda",
+      "Duration",
+      "FunctionName",
+      "stock-lstm-inference"
+     ],
+     [
+      "AWS/Lambda",
+      "Duration",
+      "FunctionName",
+      "stock-signals"
+     ],
+     [
+      "AWS/Lambda",
+      "Duration",
+      "FunctionName",
+      "stock-evaluate"
+     ],
+     [
+      "AWS/Lambda",
+      "Duration",
+      "FunctionName",
+      "stock-alert-digest"
+     ],
+     [
+      "AWS/Lambda",
+      "Duration",
+      "FunctionName",
+      "stock-api"
+     ]
+    ],
+    "stat": "Maximum",
+    "period": 86400,
+    "view": "timeSeries"
+   }
+  },
+  {
+   "type": "metric",
+   "x": 16,
+   "y": 8,
+   "width": 8,
+   "height": 6,
+   "properties": {
+    "title": "Lambda throttles",
+    "region": "ap-south-1",
+    "metrics": [
+     [
+      "AWS/Lambda",
+      "Throttles",
+      "FunctionName",
+      "stock-ingest"
+     ],
+     [
+      "AWS/Lambda",
+      "Throttles",
+      "FunctionName",
+      "stock-lstm-inference"
+     ],
+     [
+      "AWS/Lambda",
+      "Throttles",
+      "FunctionName",
+      "stock-signals"
+     ],
+     [
+      "AWS/Lambda",
+      "Throttles",
+      "FunctionName",
+      "stock-evaluate"
+     ],
+     [
+      "AWS/Lambda",
+      "Throttles",
+      "FunctionName",
+      "stock-alert-digest"
+     ],
+     [
+      "AWS/Lambda",
+      "Throttles",
+      "FunctionName",
+      "stock-api"
+     ]
+    ],
+    "stat": "Sum",
+    "period": 86400,
+    "view": "timeSeries"
+   }
+  },
+  {
+   "type": "metric",
+   "x": 0,
+   "y": 14,
+   "width": 12,
+   "height": 6,
+   "properties": {
+    "title": "API Gateway (stock-dashboard-api): requests, 4xx, 5xx",
+    "region": "ap-south-1",
+    "metrics": [
+     [
+      "AWS/ApiGateway",
+      "Count",
+      "ApiId",
+      "sjdmkf8iag"
+     ],
+     [
+      "AWS/ApiGateway",
+      "4xx",
+      "ApiId",
+      "sjdmkf8iag"
+     ],
+     [
+      "AWS/ApiGateway",
+      "5xx",
+      "ApiId",
+      "sjdmkf8iag"
+     ]
+    ],
+    "stat": "Sum",
+    "period": 86400,
+    "view": "timeSeries"
+   }
+  },
+  {
+   "type": "metric",
+   "x": 12,
+   "y": 14,
+   "width": 12,
+   "height": 6,
+   "properties": {
+    "title": "API Gateway latency (p90 ms)",
+    "region": "ap-south-1",
+    "metrics": [
+     [
+      "AWS/ApiGateway",
+      "Latency",
+      "ApiId",
+      "sjdmkf8iag"
+     ]
+    ],
+    "stat": "p90",
+    "period": 86400,
+    "view": "timeSeries"
+   }
+  },
+  {
+   "type": "metric",
+   "x": 0,
+   "y": 20,
+   "width": 12,
+   "height": 6,
+   "properties": {
+    "title": "DynamoDB throttle events",
+    "region": "ap-south-1",
+    "metrics": [
+     [
+      "AWS/DynamoDB",
+      "ReadThrottleEvents",
+      "TableName",
+      "stock-prices"
+     ],
+     [
+      "AWS/DynamoDB",
+      "WriteThrottleEvents",
+      "TableName",
+      "stock-prices"
+     ],
+     [
+      "AWS/DynamoDB",
+      "ReadThrottleEvents",
+      "TableName",
+      "stock-predictions"
+     ],
+     [
+      "AWS/DynamoDB",
+      "WriteThrottleEvents",
+      "TableName",
+      "stock-predictions"
+     ],
+     [
+      "AWS/DynamoDB",
+      "ReadThrottleEvents",
+      "TableName",
+      "stock-signals"
+     ],
+     [
+      "AWS/DynamoDB",
+      "WriteThrottleEvents",
+      "TableName",
+      "stock-signals"
+     ]
+    ],
+    "stat": "Sum",
+    "period": 86400,
+    "view": "timeSeries"
+   }
+  },
+  {
+   "type": "metric",
+   "x": 12,
+   "y": 20,
+   "width": 12,
+   "height": 6,
+   "properties": {
+    "title": "AAPL live absolute error per scored day, LSTM vs naive (USD)",
+    "region": "ap-south-1",
+    "metrics": [
+     [
+      "StockProject/ModelHealth",
+      "ModelAbsError",
+      "Symbol",
+      "AAPL"
+     ],
+     [
+      ".",
+      "NaiveAbsError",
+      ".",
+      "."
+     ]
+    ],
+    "stat": "Average",
+    "period": 86400,
+    "view": "timeSeries"
+   }
+  }
+ ]
+}
