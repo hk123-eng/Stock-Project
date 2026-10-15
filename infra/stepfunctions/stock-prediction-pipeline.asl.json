@@ -1,0 +1,443 @@
+{
+  "Comment": "Daily stock pipeline: validate input -> ingest real prices -> LSTM prediction (persisted) -> signals + deduplicated alerts -> score saved predictions vs actuals. Every failure publishes to SNS; a CloudWatch alarm covers anything else.",
+  "StartAt": "ValidateInput",
+  "TimeoutSeconds": 900,
+  "States": {
+    "ValidateInput": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.symbol",
+              "IsPresent": true
+            },
+            {
+              "Variable": "$.symbol",
+              "IsString": true
+            },
+            {
+              "Or": [
+                {
+                  "Variable": "$.symbol",
+                  "StringEquals": "AAPL"
+                }
+              ]
+            }
+          ],
+          "Next": "IngestPrices"
+        }
+      ],
+      "Default": "InvalidInput"
+    },
+    "InvalidInput": {
+      "Type": "Pass",
+      "Parameters": {
+        "symbol": "INVALID",
+        "error": {
+          "Error": "InvalidInput",
+          "Cause.$": "States.Format('Expected input with symbol = one of AAPL. Got: {}', States.JsonToString($))"
+        }
+      },
+      "Next": "PublishFailure"
+    },
+    "IngestPrices": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:ap-south-1:542601847637:function:stock-ingest",
+        "Payload": {
+          "symbol.$": "$.symbol"
+        }
+      },
+      "ResultSelector": {
+        "result.$": "$.Payload"
+      },
+      "ResultPath": "$.ingest",
+      "TimeoutSeconds": 120,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        },
+        {
+          "ErrorEquals": [
+            "IngestError"
+          ],
+          "IntervalSeconds": 60,
+          "MaxAttempts": 1
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "PublishFailure"
+        }
+      ],
+      "Next": "CheckIngest"
+    },
+    "CheckIngest": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.ingest.result.statusCode",
+              "IsPresent": true
+            },
+            {
+              "Variable": "$.ingest.result.statusCode",
+              "IsNumeric": true
+            },
+            {
+              "Variable": "$.ingest.result.statusCode",
+              "NumericEquals": 200
+            }
+          ],
+          "Next": "Predict"
+        }
+      ],
+      "Default": "IngestFailed"
+    },
+    "IngestFailed": {
+      "Type": "Pass",
+      "Parameters": {
+        "symbol.$": "$.symbol",
+        "error": {
+          "Error": "IngestFailed",
+          "Cause.$": "States.JsonToString($.ingest.result)"
+        }
+      },
+      "Next": "PublishFailure"
+    },
+    "Predict": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:ap-south-1:542601847637:function:stock-lstm-inference",
+        "Payload": {
+          "symbol.$": "$.symbol",
+          "mode": "predict",
+          "execution_id.$": "$$.Execution.Id"
+        }
+      },
+      "ResultSelector": {
+        "result.$": "$.Payload"
+      },
+      "ResultPath": "$.prediction",
+      "TimeoutSeconds": 120,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "PublishFailure"
+        }
+      ],
+      "Next": "CheckPrediction"
+    },
+    "CheckPrediction": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.prediction.result.statusCode",
+              "IsPresent": true
+            },
+            {
+              "Variable": "$.prediction.result.statusCode",
+              "IsNumeric": true
+            },
+            {
+              "Variable": "$.prediction.result.statusCode",
+              "NumericEquals": 200
+            }
+          ],
+          "Next": "ComputeSignals"
+        }
+      ],
+      "Default": "PredictionFailed"
+    },
+    "PredictionFailed": {
+      "Type": "Pass",
+      "Parameters": {
+        "symbol.$": "$.symbol",
+        "error": {
+          "Error": "PredictionFailed",
+          "Cause.$": "States.JsonToString($.prediction.result)"
+        }
+      },
+      "Next": "PublishFailure"
+    },
+    "PublishFailure": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:ap-south-1:542601847637:stock-prediction-alerts",
+        "Subject": "Stock pipeline FAILED",
+        "Message.$": "States.Format('The stock prediction pipeline failed.\nSymbol: {}\nExecution: {}\nError: {}', $.symbol, $$.Execution.Id, States.JsonToString($.error))"
+      },
+      "ResultPath": null,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.publishError",
+          "Next": "Failed"
+        }
+      ],
+      "Next": "Failed"
+    },
+    "Failed": {
+      "Type": "Fail",
+      "Error": "PipelineFailed",
+      "Cause": "See SNS failure alert / CloudWatch alarm"
+    },
+    "Done": {
+      "Type": "Succeed"
+    },
+    "ComputeSignals": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:ap-south-1:542601847637:function:stock-signals",
+        "Payload": {
+          "symbol.$": "$.symbol",
+          "prediction.$": "$.prediction.result",
+          "execution_id.$": "$$.Execution.Id"
+        }
+      },
+      "ResultSelector": {
+        "result.$": "$.Payload"
+      },
+      "ResultPath": "$.signals",
+      "TimeoutSeconds": 120,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "PublishFailure"
+        }
+      ],
+      "Next": "CheckSignals"
+    },
+    "CheckSignals": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.signals.result.statusCode",
+              "IsPresent": true
+            },
+            {
+              "Variable": "$.signals.result.statusCode",
+              "IsNumeric": true
+            },
+            {
+              "Variable": "$.signals.result.statusCode",
+              "NumericEquals": 200
+            }
+          ],
+          "Next": "AlertNeeded"
+        }
+      ],
+      "Default": "SignalsFailed"
+    },
+    "SignalsFailed": {
+      "Type": "Pass",
+      "Parameters": {
+        "symbol.$": "$.symbol",
+        "error": {
+          "Error": "SignalsFailed",
+          "Cause.$": "States.JsonToString($.signals.result)"
+        }
+      },
+      "Next": "PublishFailure"
+    },
+    "AlertNeeded": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.signals.result.alert",
+              "IsPresent": true
+            },
+            {
+              "Variable": "$.signals.result.alert",
+              "IsBoolean": true
+            },
+            {
+              "Variable": "$.signals.result.alert",
+              "BooleanEquals": true
+            },
+            {
+              "Variable": "$.signals.result.subject",
+              "IsString": true
+            },
+            {
+              "Variable": "$.signals.result.message",
+              "IsString": true
+            }
+          ],
+          "Next": "PublishAlert"
+        }
+      ],
+      "Default": "ScorePredictions"
+    },
+    "PublishAlert": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:ap-south-1:542601847637:stock-prediction-alerts",
+        "Subject.$": "$.signals.result.subject",
+        "Message.$": "$.signals.result.message"
+      },
+      "ResultPath": "$.alertPublish",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "PublishFailure"
+        }
+      ],
+      "Next": "ScorePredictions"
+    },
+    "ScorePredictions": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "arn:aws:lambda:ap-south-1:542601847637:function:stock-evaluate",
+        "Payload": {
+          "symbol.$": "$.symbol"
+        }
+      },
+      "ResultSelector": {
+        "result.$": "$.Payload"
+      },
+      "ResultPath": "$.score",
+      "TimeoutSeconds": 120,
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 2
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": [
+            "States.ALL"
+          ],
+          "ResultPath": "$.error",
+          "Next": "PublishFailure"
+        }
+      ],
+      "Next": "CheckScore"
+    },
+    "CheckScore": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "And": [
+            {
+              "Variable": "$.score.result.statusCode",
+              "IsPresent": true
+            },
+            {
+              "Variable": "$.score.result.statusCode",
+              "IsNumeric": true
+            },
+            {
+              "Variable": "$.score.result.statusCode",
+              "NumericEquals": 200
+            }
+          ],
+          "Next": "Done"
+        }
+      ],
+      "Default": "ScoreFailed"
+    },
+    "ScoreFailed": {
+      "Type": "Pass",
+      "Parameters": {
+        "symbol.$": "$.symbol",
+        "error": {
+          "Error": "ScoreFailed",
+          "Cause.$": "States.JsonToString($.score.result)"
+        }
+      },
+      "Next": "PublishFailure"
+    }
+  }
+}

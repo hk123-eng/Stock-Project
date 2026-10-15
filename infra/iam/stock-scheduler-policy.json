@@ -1,0 +1,1 @@
+{"Version":"2012-10-17","Statement":[{"Sid":"StartPipelineOnly","Effect":"Allow","Action":"states:StartExecution","Resource":"arn:aws:states:ap-south-1:542601847637:stateMachine:stock-prediction-pipeline"}]}

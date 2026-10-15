@@ -1,0 +1,13 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "Logs", "Effect": "Allow", "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+     "Resource": ["arn:aws:logs:ap-south-1:542601847637:log-group:/aws/lambda/stock-api", "arn:aws:logs:ap-south-1:542601847637:log-group:/aws/lambda/stock-api:*"]},
+    {"Sid": "ReadTables", "Effect": "Allow", "Action": "dynamodb:Query",
+     "Resource": ["arn:aws:dynamodb:ap-south-1:542601847637:table/stock-prices",
+                  "arn:aws:dynamodb:ap-south-1:542601847637:table/stock-predictions",
+                  "arn:aws:dynamodb:ap-south-1:542601847637:table/stock-signals"]},
+    {"Sid": "ReadEvaluation", "Effect": "Allow", "Action": "s3:GetObject",
+     "Resource": "arn:aws:s3:::stock-prediction-raw-542601847637-ap-south-1-an/predictions/evaluation/*"}
+  ]
+}

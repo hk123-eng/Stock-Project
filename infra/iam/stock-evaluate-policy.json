@@ -1,0 +1,14 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "Logs", "Effect": "Allow", "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+     "Resource": ["arn:aws:logs:ap-south-1:542601847637:log-group:/aws/lambda/stock-evaluate", "arn:aws:logs:ap-south-1:542601847637:log-group:/aws/lambda/stock-evaluate:*"]},
+    {"Sid": "ReadPricesAndPredictions", "Effect": "Allow", "Action": "dynamodb:Query",
+     "Resource": ["arn:aws:dynamodb:ap-south-1:542601847637:table/stock-prices",
+                  "arn:aws:dynamodb:ap-south-1:542601847637:table/stock-predictions"]},
+    {"Sid": "ScorePredictions", "Effect": "Allow", "Action": "dynamodb:UpdateItem",
+     "Resource": "arn:aws:dynamodb:ap-south-1:542601847637:table/stock-predictions"},
+    {"Sid": "ModelHealthMetrics", "Effect": "Allow", "Action": "cloudwatch:PutMetricData", "Resource": "*",
+     "Condition": {"StringEquals": {"cloudwatch:namespace": "StockProject/ModelHealth"}}}
+  ]
+}

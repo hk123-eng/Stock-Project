@@ -1,0 +1,28 @@
+{
+  "DistributionConfig": {
+    "CallerReference": "stock-dashboard-1791211559",
+    "Comment": "stock-dashboard: private S3 origin via OAC",
+    "Enabled": true,
+    "DefaultRootObject": "index.html",
+    "PriceClass": "PriceClass_200",
+    "HttpVersion": "http2and3",
+    "IsIPV6Enabled": true,
+    "Origins": {"Quantity": 1, "Items": [{
+      "Id": "dashboard-s3",
+      "DomainName": "stock-dashboard-542601847637-ap-south-1.s3.ap-south-1.amazonaws.com",
+      "OriginAccessControlId": "E1BHMZIJ62GXYK",
+      "S3OriginConfig": {"OriginAccessIdentity": ""}
+    }]},
+    "DefaultCacheBehavior": {
+      "TargetOriginId": "dashboard-s3",
+      "ViewerProtocolPolicy": "redirect-to-https",
+      "AllowedMethods": {"Quantity": 2, "Items": ["GET", "HEAD"], "CachedMethods": {"Quantity": 2, "Items": ["GET", "HEAD"]}},
+      "Compress": true,
+      "CachePolicyId": "658327ea-f89d-4fab-a63d-7e88639e58f6",
+      "ResponseHeadersPolicyId": "67f7725c-6f97-4210-82d7-5512b31e9d03"
+    },
+    "ViewerCertificate": {"CloudFrontDefaultCertificate": true, "MinimumProtocolVersion": "TLSv1.2_2021"},
+    "Restrictions": {"GeoRestriction": {"RestrictionType": "none", "Quantity": 0}}
+  },
+  "Tags": {"Items": [{"Key": "project", "Value": "stock-prediction"}]}
+}

@@ -1,0 +1,19 @@
+{
+  "AlarmName": "stock-pipeline-failed-executions",
+  "AlarmDescription": "Any stock-prediction-pipeline execution that FAILED, TIMED_OUT or was ABORTED (covers States.Runtime errors that bypass the in-workflow Catch). Notifies SNS stock-prediction-alerts.",
+  "ActionsEnabled": true,
+  "AlarmActions": ["arn:aws:sns:ap-south-1:542601847637:stock-prediction-alerts"],
+  "OKActions": [],
+  "EvaluationPeriods": 1,
+  "DatapointsToAlarm": 1,
+  "Threshold": 1,
+  "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+  "TreatMissingData": "notBreaching",
+  "Metrics": [
+    {"Id": "total", "Expression": "FILL(failed,0)+FILL(timedout,0)+FILL(aborted,0)", "Label": "Failed+TimedOut+Aborted executions", "ReturnData": true},
+    {"Id": "failed", "ReturnData": false, "MetricStat": {"Metric": {"Namespace": "AWS/States", "MetricName": "ExecutionsFailed", "Dimensions": [{"Name": "StateMachineArn", "Value": "arn:aws:states:ap-south-1:542601847637:stateMachine:stock-prediction-pipeline"}]}, "Period": 300, "Stat": "Sum"}},
+    {"Id": "timedout", "ReturnData": false, "MetricStat": {"Metric": {"Namespace": "AWS/States", "MetricName": "ExecutionsTimedOut", "Dimensions": [{"Name": "StateMachineArn", "Value": "arn:aws:states:ap-south-1:542601847637:stateMachine:stock-prediction-pipeline"}]}, "Period": 300, "Stat": "Sum"}},
+    {"Id": "aborted", "ReturnData": false, "MetricStat": {"Metric": {"Namespace": "AWS/States", "MetricName": "ExecutionsAborted", "Dimensions": [{"Name": "StateMachineArn", "Value": "arn:aws:states:ap-south-1:542601847637:stateMachine:stock-prediction-pipeline"}]}, "Period": 300, "Stat": "Sum"}}
+  ],
+  "Tags": [{"Key": "project", "Value": "stock-prediction"}]
+}

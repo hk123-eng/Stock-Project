@@ -1,0 +1,15 @@
+{
+  "Name": "stock-daily-pipeline",
+  "GroupName": "default",
+  "Description": "Mon-Fri 18:30 America/New_York (2.5 h after the 16:00 US close): run stock-prediction-pipeline for AAPL",
+  "ScheduleExpression": "cron(30 18 ? * MON-FRI *)",
+  "ScheduleExpressionTimezone": "America/New_York",
+  "FlexibleTimeWindow": {"Mode": "OFF"},
+  "State": "ENABLED",
+  "Target": {
+    "Arn": "arn:aws:states:ap-south-1:542601847637:stateMachine:stock-prediction-pipeline",
+    "RoleArn": "arn:aws:iam::542601847637:role/stock-scheduler-role",
+    "Input": "{\"symbol\":\"AAPL\"}",
+    "RetryPolicy": {"MaximumRetryAttempts": 2, "MaximumEventAgeInSeconds": 3600}
+  }
+}

@@ -1,0 +1,30 @@
+# build artefacts and local environments
+build/
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/
+*.zip
+
+# secrets / credentials (none should ever be in this repo)
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+credentials
+*credentials*.json
+*secret*
+!**/secret-scan.md
+*.apikey
+
+# model and layer artefacts (live in S3, never in git)
+*.tflite
+*.pkl
+*.h5
+*.keras
+*.joblib
+layers/
+python/

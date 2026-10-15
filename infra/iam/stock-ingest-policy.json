@@ -1,0 +1,13 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "Logs", "Effect": "Allow", "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+     "Resource": ["arn:aws:logs:ap-south-1:542601847637:log-group:/aws/lambda/stock-ingest", "arn:aws:logs:ap-south-1:542601847637:log-group:/aws/lambda/stock-ingest:*"]},
+    {"Sid": "ReadApiKey", "Effect": "Allow", "Action": "ssm:GetParameter",
+     "Resource": "arn:aws:ssm:ap-south-1:542601847637:parameter/stock-project/alphavantage-api-key"},
+    {"Sid": "PricesReadWrite", "Effect": "Allow", "Action": ["dynamodb:Query", "dynamodb:PutItem"],
+     "Resource": "arn:aws:dynamodb:ap-south-1:542601847637:table/stock-prices"},
+    {"Sid": "ArchiveRaw", "Effect": "Allow", "Action": "s3:PutObject",
+     "Resource": "arn:aws:s3:::stock-prediction-raw-542601847637-ap-south-1-an/raw/*"}
+  ]
+}

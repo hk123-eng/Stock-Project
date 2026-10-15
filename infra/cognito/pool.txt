@@ -1,0 +1,1 @@
+ap-south-1_OsBj5ZbkR	arn:aws:cognito-idp:ap-south-1:542601847637:userpool/ap-south-1_OsBj5ZbkR	LITE	0
