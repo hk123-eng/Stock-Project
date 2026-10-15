@@ -52,12 +52,44 @@
     };
   }
 
+  // Bollinger(n, k) bands per day with POPULATION sigma, matching src/signals (stock-signals).
+  function bollingerSeries(prices, n = 20, k = 2) {
+    const out = [];
+    for (let i = n - 1; i < prices.length; i++) {
+      const w = prices.slice(i - n + 1, i + 1).map((p) => Number(p.close));
+      const mid = w.reduce((a, b) => a + b, 0) / n;
+      const sd = Math.sqrt(w.reduce((a, b) => a + (b - mid) ** 2, 0) / n);
+      out.push({ x: prices[i].trade_date, mid, upper: mid + k * sd, lower: mid - k * sd });
+    }
+    return out;
+  }
+
+  // Rows for the signals panel; missing values show as "—".
+  function signalRows(sg) {
+    const macdState = sg.macd == null || sg.macd_signal == null ? "—"
+      : sg.macd > sg.macd_signal ? "MACD above signal" : "MACD below signal";
+    return [
+      ["SMA 20", fmt.money(sg.sma_20)], ["SMA 50", fmt.money(sg.sma_50)],
+      ["RSI 14", fmt.num(sg.rsi_14, 1)], ["20-day volatility", sg.volatility_20d_pct == null ? "—" : fmt.num(sg.volatility_20d_pct) + "%"],
+      ["Trend", sg.sma_20 == null || sg.sma_50 == null ? "—" : sg.sma_20 > sg.sma_50 ? "SMA20 above SMA50" : "SMA20 below SMA50"],
+      ["MACD (12,26,9)", sg.macd == null ? "—" : `${fmt.num(sg.macd, 3)} / signal ${fmt.num(sg.macd_signal, 3)}`],
+      ["MACD histogram", fmt.num(sg.macd_hist, 3)], ["MACD state", macdState],
+      ["Bollinger (20, 2σ)", sg.bb_lower == null ? "—" : `${fmt.money(sg.bb_lower)} – ${fmt.money(sg.bb_upper)}`],
+      ["Bollinger %B", fmt.num(sg.bb_pct_b, 2)],
+    ];
+  }
+
+  function alertNote(a) {
+    if (a.test_alert) return ' <span class="small">(test run, not a production alert)</span>';
+    return a.notified ? ' <span class="small">(emailed)</span>' : "";
+  }
+
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
 
   if (typeof module !== "undefined") {
-    module.exports = { fmt, buildSeries, evaluationSummary, healthView, escapeHtml };
+    module.exports = { fmt, buildSeries, evaluationSummary, healthView, bollingerSeries, signalRows, alertNote, escapeHtml };
     return;
   }
 
@@ -90,6 +122,14 @@
       { label: "LSTM prediction (next close)", data: s.preds, borderColor: cssVar("--series-2"),
         backgroundColor: cssVar("--series-2"), showLine: false, pointRadius: 5, pointStyle: "rectRot" },
     ];
+    if ($("show-bands").checked) {
+      const bb = bollingerSeries(state.prices.prices);
+      datasets.push(
+        { label: "Bollinger upper (20, 2σ)", data: bb.map((b) => ({ x: b.x, y: b.upper })), borderColor: cssVar("--muted"),
+          borderWidth: 1, pointRadius: 0, borderDash: [2, 3] },
+        { label: "Bollinger lower (20, 2σ)", data: bb.map((b) => ({ x: b.x, y: b.lower })), borderColor: cssVar("--muted"),
+          borderWidth: 1, pointRadius: 0, borderDash: [2, 3] });
+    }
     if (showSyn) datasets.push({ label: "SYNTHETIC test data — NOT market data", data: s.syn,
       borderColor: cssVar("--muted"), borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0 });
     const labels = [...new Set([...s.real, ...s.preds, ...s.syn].map((p) => p.x))].sort();
@@ -157,18 +197,14 @@
 
     const sg = state.signals && state.signals.signals.slice(-1)[0];
     if (sg) {
-      $("signals").innerHTML = [
-        ["SMA 20", fmt.money(sg.sma_20)], ["SMA 50", fmt.money(sg.sma_50)],
-        ["RSI 14", fmt.num(sg.rsi_14, 1)], ["20-day volatility", fmt.num(sg.volatility_20d_pct) + "%"],
-        ["Trend", sg.sma_20 > sg.sma_50 ? "SMA20 above SMA50" : "SMA20 below SMA50"],
-      ].map(([k, v]) => `<div><dt>${k}</dt><dd>${escapeHtml(v)}</dd></div>`).join("") +
+      $("signals").innerHTML = signalRows(sg).map(([k, v]) => `<div><dt>${k}</dt><dd>${escapeHtml(v)}</dd></div>`).join("") +
         `<p class="small">Computed for ${escapeHtml(sg.trade_date)} from real data.</p>`;
     }
 
     const al = state.alerts ? state.alerts.alerts.slice().reverse() : [];
     $("alerts").innerHTML = al.length ? al.map((a) => `<li><strong>${escapeHtml(a.trade_date)}</strong> ${
       a.alerts.map((x) => `<span class="tag">${escapeHtml(x.type)}</span> ${escapeHtml(x.detail)}`).join("<br>")}${
-      a.notified ? ' <span class="small">(emailed)</span>' : ""}</li>`).join("") : "<li>No alerts raised yet.</li>";
+      alertNote(a)}</li>`).join("") : "<li>No alerts raised yet.</li>";
 
     const ph = state.predictions ? state.predictions.predictions.slice().reverse() : [];
     $("pred-rows").innerHTML = ph.length ? ph.map((r) => `<tr><td>${escapeHtml(r.as_of_date)}</td><td>${fmt.money(r.predicted_close)}</td>
@@ -210,6 +246,7 @@
     $("logout-btn").onclick = () => root.StockAuth.logout();
     $("refresh-btn").onclick = () => load().catch(showError);
     $("show-synthetic").onchange = () => state.prices && renderChart();
+    $("show-bands").onchange = () => state.prices && renderChart();
     try {
       await root.StockAuth.handleCallback();
     } catch (e) { $("signin-msg").textContent = e.message; }

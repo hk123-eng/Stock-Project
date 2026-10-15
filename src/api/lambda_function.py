@@ -141,7 +141,12 @@ def alerts(symbol, limit):
     items.sort(key=lambda i: i["trade_date"])
     return {"symbol": symbol, "alerts": [
         {"trade_date": i["trade_date"], "alerts": i["alerts"], "alert_sent_at": i.get("alert_sent_at"),
-         "notified": "alert_sent_at" in i} for i in items[-limit:]]}
+         "notified": "alert_sent_at" in i,
+         # test runs are labelled with an execution id starting "test-"; a direct test invocation sends no email
+         "test_alert": str(i.get("alert_execution", "")).split(":")[-1].startswith("test-"),
+         # per-type markers written by stock-signals since Phase 8 item 2 (older items only have alert_sent_at)
+         "notified_types": sorted(k[len("alert_sent_"):] for k in i if k.startswith("alert_sent_") and k != "alert_sent_at")}
+        for i in items[-limit:]]}
 
 
 def _mae(xs):

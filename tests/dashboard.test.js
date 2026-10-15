@@ -42,3 +42,29 @@ assert.equal(healthView(null), null);
 
 assert.equal(escapeHtml('<img src=x onerror="a">'), "&lt;img src=x onerror=&quot;a&quot;&gt;");
 console.log("dashboard tests: all passed");
+
+// ---- Phase 8 item 2: Bollinger series + signal rows ----
+const { bollingerSeries, signalRows } = require("../dashboard/app.js");
+// [2,4,4,4,5,5,7,9] with n=8: mean 5, population sigma 2 -> bands 1 and 9 (hand-computed, same case as the Python test)
+const bbs = bollingerSeries([2, 4, 4, 4, 5, 5, 7, 9].map((c, i) => ({ trade_date: `d${i}`, close: c })), 8, 2);
+assert.equal(bbs.length, 1);
+assert.deepEqual(bbs[0], { x: "d7", mid: 5, upper: 9, lower: 1 });
+// 1..20 with defaults: upper 22.0325626, lower -1.0325626
+const bb20 = bollingerSeries(Array.from({ length: 21 }, (_, i) => ({ trade_date: `t${i}`, close: i + 1 })));
+assert.equal(bb20.length, 2, "one value per day from the 20th close");
+assert.ok(Math.abs(bb20[0].upper - 22.0325626) < 1e-6 && Math.abs(bb20[0].lower + 1.0325626) < 1e-6);
+assert.equal(bollingerSeries([{ trade_date: "a", close: 1 }]).length, 0);
+const rows = Object.fromEntries(signalRows({ sma_20: 2, sma_50: 1, rsi_14: 50, volatility_20d_pct: 1, macd: 1.23456,
+  macd_signal: 1, macd_hist: 0.23456, bb_lower: 300, bb_upper: 340, bb_pct_b: 0.5 }));
+assert.equal(rows["MACD (12,26,9)"], "1.235 / signal 1.000");
+assert.equal(rows["MACD state"], "MACD above signal");
+assert.equal(rows["Bollinger (20, 2σ)"], "$300.00 – $340.00");
+const old = Object.fromEntries(signalRows({ sma_20: 2, sma_50: 1, rsi_14: 50, volatility_20d_pct: 1 }));
+assert.equal(old["MACD (12,26,9)"], "—", "items written before Phase 8 item 2 have no MACD");
+assert.equal(old["Bollinger (20, 2σ)"], "—");
+console.log("dashboard Phase 8 item 2 tests: all passed");
+const { alertNote } = require("../dashboard/app.js");
+assert.match(alertNote({ notified: true, test_alert: true }), /test run/);
+assert.match(alertNote({ notified: true, test_alert: false }), /emailed/);
+assert.equal(alertNote({ notified: false }), "");
+console.log("dashboard alert-label tests: all passed");
