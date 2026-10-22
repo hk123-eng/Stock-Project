@@ -269,3 +269,10 @@ Work order from the owner (2026-10-22). Decisions on "go": **A** SNS message att
 - Backfill (direct invoke, 3 batches): all **44** existing `raw/alphavantage/` archives validated, **44 ok, 0 failed** (no key/URL found in any archive) → 44 manifests under `manifests/alphavantage/` (531,908 bytes).
 - From the next scheduled run, each ingest archive (5 per weekday) is validated automatically.
 - Unit tests `tests/test_archive_validator.py` (7).
+
+### 1e Athena + Glue Data Catalog — done 2026-10-22 13:05 UTC
+- Raw archives are pretty-printed nested JSON (Athena JSON SerDes need one record per line), so the tables read the single-line manifests from 1d instead; `raw/` is untouched.
+- Workgroup `stock-workgroup` (enforced; results `athena-results/` SSE-S3; **BytesScannedCutoffPerQuery 10,485,760**, the minimum; CloudWatch metrics off). Glue database `stock_project`; table `archive_manifests` and view `daily_prices`, both hand-written DDL in `infra/athena/` (no crawler). Runner `infra/athena/run_query.py`.
+- Tested queries in `docs/athena-queries.md`: days per ticker (AAPL 113, others 104 each), weekly change %, revised bars, archive quality (44 ok), and a cross-check: count and sum of closes per ticker match DynamoDB real rows exactly.
+- Finding: across archives, 28 bars were revised and **only the volume** changed (no close ever changed). That is why every scheduled ingest reports `updated 1`. Consequence for decision B (skip only when `inserted == 0 and updated == 0`): on a normal day after a trading day `updated` is 1, so the skip will fire only when Alpha Vantage returns nothing new at all (e.g. a holiday run after the previous day's volume was already final).
+- 9 Athena queries ran; each scanned ≤ 531,908 bytes (billed at the 10 MB minimum ≈ $0.00005 each).
