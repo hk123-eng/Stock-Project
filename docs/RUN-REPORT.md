@@ -276,3 +276,12 @@ Work order from the owner (2026-10-22). Decisions on "go": **A** SNS message att
 - Tested queries in `docs/athena-queries.md`: days per ticker (AAPL 113, others 104 each), weekly change %, revised bars, archive quality (44 ok), and a cross-check: count and sum of closes per ticker match DynamoDB real rows exactly.
 - Finding: across archives, 28 bars were revised and **only the volume** changed (no close ever changed). That is why every scheduled ingest reports `updated 1`. Consequence for decision B (skip only when `inserted == 0 and updated == 0`): on a normal day after a trading day `updated` is 1, so the skip will fire only when Alpha Vantage returns nothing new at all (e.g. a holiday run after the previous day's volume was already final).
 - 9 Athena queries ran; each scanned ≤ 531,908 bytes (billed at the 10 MB minimum ≈ $0.00005 each).
+
+### 1f Log metric filters + dashboard widgets — done 2026-10-22 13:05 UTC
+- Custom metrics before: 4 (`StockProject/ModelHealth` ModelAbsError, NaiveAbsError; `StockProject/Pipeline` TickersProcessed, TickerFailures). After: at most 6 of the 10 free.
+- On `/aws/lambda/stock-ingest` (text log format; unhandled exceptions log as `[ERROR] <Type>: <message>`):
+  - `stock-ingest-throttles`: `?"[ERROR] RateLimitError" ?"[ERROR] DailyLimitError"` → `StockProject/Pipeline IngestThrottles` (1 per match)
+  - `stock-ingest-errors`: `"[ERROR]"` → `StockProject/Pipeline IngestErrors` (every unhandled ingest error, throttles included)
+- Pattern tests (`test-metric-filter`): the throttle pattern matched only the two throttle lines among 4 samples; the error pattern matched only the 2 `[ERROR]` lines among 4 samples.
+- Live test: direct invoke of `stock-ingest` with `{"test": "final-run-20261022 …"}` at 12:59 UTC → `IngestError: invalid or missing 'symbol'` (raised before the SSM read and the Alpha Vantage call: **0 API calls**) → `IngestErrors` = 1 in the 12:55 UTC 5-minute bucket. `IngestThrottles` has had no matching line (no live throttle was provoked, to save calls). This test also counts as 1 Lambda error for `stock-ingest` in `AWS/Lambda Errors` on 2026-10-22; no alarm watches that metric.
+- CloudWatch dashboard `stock-project`: 11 → 13 widgets (row y=26: IngestErrors, IngestThrottles; Sum per hour). Previous live definition saved as `infra/rollback/2026-10-22/dashboard-stock-project-before.json` (identical to the repo copy before the change). Validation messages: none.

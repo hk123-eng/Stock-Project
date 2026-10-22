@@ -383,6 +383,64 @@
     "period": 86400,
     "view": "timeSeries"
    }
+  },
+  {
+   "type": "metric",
+   "x": 0,
+   "y": 26,
+   "width": 12,
+   "height": 6,
+   "properties": {
+    "title": "stock-ingest errors ([ERROR] lines, log metric filter)",
+    "region": "ap-south-1",
+    "view": "timeSeries",
+    "stacked": false,
+    "stat": "Sum",
+    "period": 3600,
+    "metrics": [
+     [
+      "StockProject/Pipeline",
+      "IngestErrors",
+      {
+       "label": "IngestErrors"
+      }
+     ]
+    ],
+    "yAxis": {
+     "left": {
+      "min": 0
+     }
+    }
+   }
+  },
+  {
+   "type": "metric",
+   "x": 12,
+   "y": 26,
+   "width": 12,
+   "height": 6,
+   "properties": {
+    "title": "stock-ingest Alpha Vantage throttles (log metric filter)",
+    "region": "ap-south-1",
+    "view": "timeSeries",
+    "stacked": false,
+    "stat": "Sum",
+    "period": 3600,
+    "metrics": [
+     [
+      "StockProject/Pipeline",
+      "IngestThrottles",
+      {
+       "label": "IngestThrottles"
+      }
+     ]
+    ],
+    "yAxis": {
+     "left": {
+      "min": 0
+     }
+    }
+   }
   }
  ]
 }

@@ -166,7 +166,7 @@
 - [ ] 1c Observe a real INSERT → PriceIngested in the logger log (after the 2026-10-22 22:30 UTC scheduled run)
 - [x] 1d S3 raw/ event → `stock-archive-validator` (test object + 44-archive backfill: 44 ok)
 - [x] 1e Athena + Glue (`stock_project`, `stock-workgroup`), docs/athena-queries.md
-- [ ] 1f ≤2 log metric filters + dashboard widgets
+- [x] 1f 2 log metric filters (IngestErrors, IngestThrottles) + 2 dashboard widgets
 - [ ] 1g Cognito groups viewer/admin + GET /me
 ### 2. Live Lambdas (window 19:00–09:30 ET only)
 - [ ] X-Ray active tracing (not stock-lstm-inference); state machine tracing parked (IAM JSON)
