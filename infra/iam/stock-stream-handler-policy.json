@@ -1,0 +1,12 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "Logs", "Effect": "Allow", "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+     "Resource": ["arn:aws:logs:ap-south-1:542601847637:log-group:/aws/lambda/stock-stream-handler", "arn:aws:logs:ap-south-1:542601847637:log-group:/aws/lambda/stock-stream-handler:*"]},
+    {"Sid": "ReadPricesStream", "Effect": "Allow", "Action": ["dynamodb:DescribeStream", "dynamodb:GetRecords", "dynamodb:GetShardIterator"],
+     "Resource": "arn:aws:dynamodb:ap-south-1:542601847637:table/stock-prices/stream/*"},
+    {"Sid": "ListStreams", "Effect": "Allow", "Action": "dynamodb:ListStreams", "Resource": "*"},
+    {"Sid": "PublishToStockEvents", "Effect": "Allow", "Action": "events:PutEvents",
+     "Resource": "arn:aws:events:ap-south-1:542601847637:event-bus/stock-events"}
+  ]
+}

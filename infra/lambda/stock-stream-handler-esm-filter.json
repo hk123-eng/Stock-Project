@@ -1,0 +1,1 @@
+{"Filters": [{"Pattern": "{\"eventName\": [\"INSERT\"], \"dynamodb\": {\"NewImage\": {\"source\": {\"S\": [\"alphavantage\"]}}}}"}]}

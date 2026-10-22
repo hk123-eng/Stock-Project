@@ -1,0 +1,7 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "Logs", "Effect": "Allow", "Action": ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+     "Resource": ["arn:aws:logs:ap-south-1:542601847637:log-group:/aws/lambda/stock-event-logger", "arn:aws:logs:ap-south-1:542601847637:log-group:/aws/lambda/stock-event-logger:*"]}
+  ]
+}

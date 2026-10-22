@@ -210,3 +210,53 @@ The only rule intended: expire objects under `athena-results/` after 7 days. No 
 
 ### Not needed any more
 The DLQ and CloudWatch dashboard permissions you granted (`StockProjectPhase8`, boundary v2) were sufficient.
+
+---
+
+# Final run (started 2026-10-22 12:18 UTC)
+
+Work order from the owner (2026-10-22). Decisions on "go": **A** SNS message attributes parked, alert path unchanged; **B** skip Predict and Signals only when ingest reports `inserted == 0 and updated == 0`. Items 2 and 3 run only 19:00 ET → 09:30 ET, never 16:00–18:30 ET.
+
+## Step 0 (read-only, 2026-10-22 12:18–12:31 UTC)
+- Scheduled runs since 2026-10-16 all SUCCEEDED (16, 19, 20, 21 Oct ET; 87–89 s each), including the first five-ticker run (2026-10-16 22:30 UTC = 04:00 IST 17 Oct). The two FAILED executions in the last 10 were deliberate invalid inputs (`{}` test, and `{"symbol":"XYZ"}` not started by the deploy user).
+- Real rows: AAPL 113 (2026-05-12 → 2026-10-21) + 114 legacy synthetic rows untouched; MSFT/GOOGL/AMZN/NVDA 104 each (2026-05-26 → 2026-10-21).
+- Predictions: 14 rows, all AAPL; 13 scored. Live MAE model $4.18 vs naive $2.25 (n=13; verdict "insufficient data (13 of 20)").
+- Alerts: tests = AAPL 2026-10-02 PREDICTED_MOVE (temporary 0.1% threshold), AAPL 2026-10-14 MACD_CROSS (direct invoke, not emailed); NVDA 2026-10-15 BOLLINGER_BREAK is a real signal emailed by a test execution (labelled test). Real, from scheduled runs: GOOGL 10-16 MACD_CROSS, AMZN 10-19 BIG_MOVE, MSFT 10-19 MACD_CROSS, AAPL 10-20 MACD_CROSS, GOOGL 10-21 BOLLINGER_BREAK.
+- Bollinger bands DO draw: headless Chrome render of the deployed `index.html` (real CSP, Chart.js via cdnjs + SRI, real AAPL API data from a direct `stock-api` invoke; only fetch/login mocked): upper/lower bands 81 finite points each over 100 closes. Not a signed-in browser test.
+- `StockProjectPhase9` (v1, 2026-10-15 16:12 UTC) is attached to `stock-project`; `StockRoleBoundary` default v3 (adds stream reads, X-Ray Put*, `events:PutEvents` on `stock-*` buses).
+- DLQ purged by the owner (CloudTrail `PurgeQueue`, root, 2026-10-22 12:26 UTC).
+
+## Prices checked (AWS Price List API, ap-south-1, 2026-10-22)
+| Item | Price | Expected use | Monthly |
+|---|---|---|---|
+| DynamoDB PITR | $0.228 per GB-month | ~0.16 MB over 3 tables | < $0.001 |
+| DynamoDB Streams reads | 2.5M read units free, then $0.000000228 | Lambda trigger reads (free for Lambda triggers) | $0 |
+| EventBridge custom events | $1.00 per million | ~5 PriceIngested/weekday ≈ 110 | ≈ $0.0001 |
+| Lambda requests | $0.20 per million (free tier 1M) | +~10/weekday | $0 |
+| Athena | $5.00 per TB scanned (10 MB minimum per query) | a few test queries | < $0.01 |
+| Glue Data Catalog | $1 per 100,000 objects (first 1M free) | 1 database + 3 tables | $0 |
+| CloudWatch custom metrics | $0.30 per metric-month (first 10 free) | 4 existing + 2 | $0 |
+| CloudWatch Logs | $0.67/GB ingested, $0.03/GB-month | a few KB/day | < $0.01 |
+| S3 requests | $0.005/1k PUT, $0.004/10k GET | ~5 manifests + reads/weekday | < $0.01 |
+| X-Ray | $5.00 per million traces stored (100k free) | ~30/weekday | $0 |
+| HTTP API | $1.05 per million requests | /me tests | $0 |
+
+## Item 1 – additive items
+### 1a PITR — done 2026-10-22 12:44 UTC
+`stock-prices`, `stock-predictions`, `stock-signals`: PointInTimeRecoveryStatus ENABLED, 35-day window. Before-state saved in `infra/rollback/2026-10-22/pitr-before-*.json` (all DISABLED). Rollback: `aws dynamodb update-continuous-backups --table-name <t> --point-in-time-recovery-specification PointInTimeRecoveryEnabled=false`.
+
+### 1b EventBridge bus `stock-events` + `stock-event-logger` — done 12:46 UTC
+- Bus `stock-events` (no resource policy → only this account can put events). Rule `stock-events-log-all` (pattern `{"account":["542601847637"]}`, i.e. every event) → Lambda `stock-event-logger` (python3.12 arm64 128 MB, `src/event_logger/`).
+- Role `stock-event-logger-role` (StockRoleBoundary; inline policy: its own log group only). Lambda permission limited to that rule ARN + source account.
+- `logs:CreateLogGroup` is denied to the `stock-project` user, so (as for every existing function) the function role creates its own log group on first run; retention was then set to 30 days.
+- Test: labelled event `source stock.test`, `ManualTest` (EventId 4f4b8b98-…) → logged as one JSON line. Unit tests `tests/test_event_logger.py` (2).
+
+### 1c DynamoDB Streams + `stock-stream-handler` — deployed 12:50 UTC; live path pending the next scheduled run
+- `stock-prices` stream enabled (NEW_IMAGE), stream ARN `…/stream/2026-10-22T12:47:43.682`. Table description before the change: `infra/rollback/2026-10-22/stock-prices-before-stream.json`. Rollback: delete the event source mapping, then `update-table --stream-specification StreamEnabled=false` (deletion → owner approval).
+- Lambda `stock-stream-handler` (`src/stream_handler/`), role `stock-stream-handler-role` (boundary; stream read on `stock-prices` only, `events:PutEvents` on `stock-events` only, own logs; **no DynamoDB write, no SNS**).
+- Event source mapping `16773a60-4c27-42bd-a6f5-7a9203cb29d9`: LATEST, batch 10, 2 retries, max record age 1 h, bisect on error, filter `eventName INSERT` and `NewImage.source.S = alphavantage` (`infra/lambda/stock-stream-handler-esm-filter.json`). The handler re-checks both conditions.
+- Test (direct invoke, labelled `test-final-run-20261022-*`, symbol TEST, nothing written to DynamoDB): 3 records → 1 published (INSERT alphavantage); MODIFY and untagged INSERT skipped; the PriceIngested event appeared in the `stock-event-logger` log. Unit tests `tests/test_stream_handler.py` (4).
+- Not yet observed: a real INSERT through the stream (no test rows are written to `stock-prices`; the scheduled run at 22:30 UTC will insert ~5 rows).
+
+### Repository fix
+`tests/secret_scan.py` was excluded by the `.gitignore` pattern `*secret*`, so the CI workflow would have failed on GitHub. Added `!tests/secret_scan.py`.

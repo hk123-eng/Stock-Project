@@ -18,6 +18,7 @@ credentials
 *credentials*.json
 *secret*
 !**/secret-scan.md
+!tests/secret_scan.py
 *.apikey
 
 # model and layer artefacts (live in S3, never in git)
