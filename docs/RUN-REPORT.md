@@ -326,3 +326,30 @@ Read-only facts checked for the preparation (2026-10-22 ~14:15 UTC): live defini
 - Tests `tests/test_state_machine_parallel.py` (8): generator == committed file, transitions in scope and unique names, alert path unchanged, skip rule (both counts zero, no OR), skip path reaches no Predict/Signals, branch error isolation, AAPL-only predict/score, digest on a skipped ticker sends nothing and mentions no jump.
 - Deploy: `bash infra/stepfunctions/switch-to-parallel.sh` (saves the live definition to `stock-prediction-pipeline.pre-parallel.asl.json`; schedule unchanged). Rollback: `bash infra/stepfunctions/rollback-parallel.sh`.
 - Test plan: a 5-ticker test after the scheduled run has ingested the day will see `inserted 0` and, if the volume is already final, `updated 0` → exercises the skip path. The parallel path is exercised by the next scheduled run (Fri 2026-10-23 18:30 ET) or by any test where a bar was updated. **Alpha Vantage budget:** item 2 test 5 calls + item 3 test 5 calls = my 10 for that ET day (scheduled run 5 → 15 of 25 on the key); a retry after a failure waits for the next ET day.
+
+## Item 4 — Step Functions logging: IAM JSON shown, NOT applied (2026-10-22 ~15:45 UTC)
+Read-only checks:
+- State machine `stock-prediction-pipeline`: logging `OFF`, tracing disabled.
+- `iam simulate-principal-policy` for user `stock-project`:
+  - `logs:CreateLogDelivery`, `logs:PutResourcePolicy` and `logs:CreateLogGroup` → implicitDeny.
+  - `logs:DescribeResourcePolicies` and `logs:ListLogDeliveries` → allowed.
+  - `logs:PutRetentionPolicy` on `/aws/vendedlogs/states/stock-prediction-pipeline` → allowed.
+- `stock-prediction-sfn-role` already has the log-delivery actions (inline policy `stock-prediction-sfn-inline-policy`, Sid `WriteExecutionLogs`), so only the user policy is missing.
+- The JSON shown to the owner is the P1 policy above, unchanged from PROJECT_CONTEXT.md §13.
+
+Nothing was applied and logging is still OFF. Once the owner confirms the policy is attached:
+1. Create `/aws/vendedlogs/states/stock-prediction-pipeline` and set 30-day retention.
+2. Run `update-state-machine --logging-configuration level=ERROR,includeExecutionData=false,...`. This changes the state machine, so it is done only inside the item 2/3 window, with a rollback copy saved first.
+
+## Item 5 — local baseline benchmark — done 2026-10-22 ~15:50 UTC
+- `infra/ml/baseline_benchmark.py` reads real AAPL rows from DynamoDB `stock-prices` and scored items from `stock-predictions`. Both reads are read-only, it writes nothing to AWS, and it made 0 Alpha Vantage calls. No training; model and scaler untouched.
+- Results are in `docs/model-evaluation.md` (new section) and `docs/evaluation/AAPL-baselines-2026-10-22.json`.
+  - 53 target days: naive MAE $3.07, drift $3.05, AR(5) $3.27, 5-day mean $4.19.
+  - LSTM-overlap 40 days: LSTM $6.18; the baselines $3.33–$4.65. The actual closes match the 2026-10-05 file exactly, and the naive MAE reproduces $3.33.
+  - Live 13 days: LSTM $4.18; the baselines $2.19–$2.78.
+- Tests: `tests/test_baseline_benchmark.py` (7), including a no-look-ahead check and an AR recovery check on a seeded synthetic series. The synthetic series is used only inside the unit test.
+
+## Other checks (2026-10-22 15:49 UTC)
+- DLQ: the owner purged the queue; `stock-pipeline-dlq-not-empty` returned to OK at 12:33 UTC, and `stock-pipeline-dlq-new-message` is OK.
+
+## Alpha Vantage calls by the deploy user on 2026-10-22: 0 of 10

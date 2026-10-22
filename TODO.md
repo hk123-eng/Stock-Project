@@ -175,7 +175,7 @@
 ### 3. State machine (window 19:00–09:30 ET only)
 - [ ] Parallel Signals ‖ Score + skip when inserted == 0 and updated == 0 — READY (`--parallel`, validated OK, 8 tests; `switch-to-parallel.sh`)
 ### 4–7
-- [ ] SFN logging: IAM JSON shown to owner; enable ERROR logging + 30-day retention after confirmation
-- [ ] Local baseline benchmark → docs/model-evaluation.md
-- [ ] GitHub remote + push after "push"
+- [ ] SFN logging: IAM JSON shown to owner 2026-10-22 (re-checked: user still lacks logs:CreateLogDelivery/PutResourcePolicy/CreateLogGroup) — WAITING for owner to apply it; then enable ERROR logging + 30-day retention
+- [x] Local baseline benchmark → docs/model-evaluation.md (naive/5-day mean/drift/AR(5), n = 53; LSTM overlap n = 40; live n = 13; no training, model untouched)
+- [ ] GitHub remote + push — WAITING for the repo URL and "push"
 - [ ] Final docs

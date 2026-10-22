@@ -117,7 +117,7 @@ The full inventory, with every ID, is in [`docs/aws-inventory.md`](docs/aws-inve
 - **Predictions for AAPL only:** the model was trained on AAPL only. MSFT, GOOGL, AMZN and NVDA get prices and signals only.
 - **Alpha Vantage budget:** 5 calls per scheduled run (worst case 10 with retries) out of 25/day; manual test runs must fit in the rest.
 - **Splits are detected, not corrected:** prices are unadjusted; the jump check flags them but does not adjust history.
-- **DLQ alarm:** `stock-pipeline-dlq-not-empty` stays in ALARM until the 2026-10-15 test message expires (~2026-10-29) or the queue is purged.
+- **DLQ alarm:** the owner purged the queue on 2026-10-22; `stock-pipeline-dlq-not-empty` returned to OK at 2026-10-22 12:33 UTC (checked 15:49 UTC).
 - **Test-run alerts:** test executions send real emails and set the dedup flags; the API and dashboard label them as test alerts.
 - **US market holidays** aren't modelled. A holiday run is a harmless no-op, and `target_date_estimate` may name a holiday; the API scores against the actual next real trading day.
 - **Optional MFA:** not configured (needs `cognito-idp:SetUserPoolMfaConfig`).
@@ -141,6 +141,12 @@ Full write-up: [`docs/model-evaluation.md`](docs/model-evaluation.md).
 | Directional accuracy | 50% | n/a |
 
 **Conclusion:** the model does not beat the naive baseline, and no accuracy claim beyond these numbers is made.
+
+**Baseline benchmark (2026-10-22, local, no training):** naive, 5-day mean, drift and AR(5) walk-forward on 113 stored real AAPL closes (`infra/ml/baseline_benchmark.py`).
+- 53 target days (2026-08-07 → 2026-10-21): MAE naive $3.07, drift $3.05, AR(5) $3.27, 5-day mean $4.19. Naive, drift and AR(5) are effectively tied.
+- Same 40 days as the LSTM backtest: LSTM $6.18 vs $3.33–$4.65 for the baselines.
+- 13 scored live predictions (2026-10-05 → 2026-10-21): LSTM $4.18 vs $2.19–$2.78.
+- No model shows directional skill (best: AR(5) 30/53, binomial p = 0.41).
 
 ## 8. Market-data decision (Alpha Vantage)
 **Decided 2026-10-04 and implemented 2026-10-05: Alpha Vantage, free API key, `TIME_SERIES_DAILY`, `outputsize=compact`.**

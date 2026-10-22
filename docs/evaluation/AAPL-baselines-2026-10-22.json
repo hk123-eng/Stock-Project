@@ -1,0 +1,635 @@
+{
+  "symbol": "AAPL",
+  "data": {
+    "source": "alphavantage TIME_SERIES_DAILY, unadjusted",
+    "days": 113,
+    "first": "2026-05-12",
+    "last": "2026-10-21"
+  },
+  "method": "walk-forward, predict close[t] from closes before t; t needs >= 60 earlier closes",
+  "first_target_date": "2026-08-07",
+  "last_target_date": "2026-10-21",
+  "all_days": {
+    "naive": {
+      "n": 53,
+      "mae": 3.0691,
+      "rmse": 3.9116,
+      "mape_pct": 0.9421,
+      "bias": -0.5958,
+      "directional_days": 0,
+      "directional_accuracy_pct": null
+    },
+    "mean5": {
+      "n": 53,
+      "mae": 4.1938,
+      "rmse": 5.1729,
+      "mape_pct": 1.287,
+      "bias": -1.833,
+      "directional_days": 53,
+      "directional_accuracy_pct": 47.1698
+    },
+    "drift": {
+      "n": 53,
+      "mae": 3.0523,
+      "rmse": 3.8958,
+      "mape_pct": 0.9378,
+      "bias": -0.2428,
+      "directional_days": 53,
+      "directional_accuracy_pct": 54.717
+    },
+    "ar5": {
+      "n": 53,
+      "mae": 3.27,
+      "rmse": 4.0663,
+      "mape_pct": 1.0053,
+      "bias": -0.2249,
+      "directional_days": 53,
+      "directional_accuracy_pct": 56.6038
+    }
+  },
+  "lstm_overlap": {
+    "source": "docs/evaluation/AAPL-evaluation-2026-10-05.json",
+    "days": 40,
+    "actuals_mismatched": [],
+    "first_target_date": "2026-08-07",
+    "last_target_date": "2026-10-02",
+    "metrics": {
+      "lstm": {
+        "n": 40,
+        "mae": 6.179,
+        "rmse": 7.027,
+        "mape_pct": 1.9125,
+        "bias": -2.4442,
+        "directional_days": 40,
+        "directional_accuracy_pct": 50.0
+      },
+      "naive": {
+        "n": 40,
+        "mae": 3.334,
+        "rmse": 4.2282,
+        "mape_pct": 1.0329,
+        "bias": -0.532,
+        "directional_days": 0,
+        "directional_accuracy_pct": null
+      },
+      "mean5": {
+        "n": 40,
+        "mae": 4.6532,
+        "rmse": 5.6462,
+        "mape_pct": 1.4398,
+        "bias": -1.6802,
+        "directional_days": 40,
+        "directional_accuracy_pct": 47.5
+      },
+      "drift": {
+        "n": 40,
+        "mae": 3.3329,
+        "rmse": 4.2252,
+        "mape_pct": 1.0333,
+        "bias": -0.2008,
+        "directional_days": 40,
+        "directional_accuracy_pct": 52.5
+      },
+      "ar5": {
+        "n": 40,
+        "mae": 3.5978,
+        "rmse": 4.4112,
+        "mape_pct": 1.1154,
+        "bias": -0.1787,
+        "directional_days": 40,
+        "directional_accuracy_pct": 57.5
+      }
+    }
+  },
+  "live_scored": {
+    "days": 13,
+    "first_target_date": "2026-10-05",
+    "last_target_date": "2026-10-21",
+    "metrics": {
+      "lstm": {
+        "n": 13,
+        "mae": 4.1765,
+        "rmse": 4.7708,
+        "mape_pct": 1.2244,
+        "bias": -3.7946,
+        "directional_days": 13,
+        "directional_accuracy_pct": 53.8462
+      },
+      "naive": {
+        "n": 13,
+        "mae": 2.2538,
+        "rmse": 2.7145,
+        "mape_pct": 0.6628,
+        "bias": -0.7923,
+        "directional_days": 0,
+        "directional_accuracy_pct": null
+      },
+      "mean5": {
+        "n": 13,
+        "mae": 2.7803,
+        "rmse": 3.3173,
+        "mape_pct": 0.8168,
+        "bias": -2.3031,
+        "directional_days": 13,
+        "directional_accuracy_pct": 46.1538
+      },
+      "drift": {
+        "n": 13,
+        "mae": 2.1887,
+        "rmse": 2.6357,
+        "mape_pct": 0.6439,
+        "bias": -0.3719,
+        "directional_days": 13,
+        "directional_accuracy_pct": 61.5385
+      },
+      "ar5": {
+        "n": 13,
+        "mae": 2.2615,
+        "rmse": 2.7455,
+        "mape_pct": 0.6667,
+        "bias": -0.3673,
+        "directional_days": 13,
+        "directional_accuracy_pct": 53.8462
+      }
+    }
+  },
+  "points": [
+    {
+      "date": "2026-08-07",
+      "actual": 313.33,
+      "previous_close": 312.41,
+      "naive": 312.41,
+      "mean5": 309.024,
+      "drift": 312.7085,
+      "ar5": 320.631
+    },
+    {
+      "date": "2026-08-10",
+      "actual": 308.26,
+      "previous_close": 313.33,
+      "naive": 313.33,
+      "mean5": 309.908,
+      "drift": 313.6388,
+      "ar5": 314.3798
+    },
+    {
+      "date": "2026-08-11",
+      "actual": 304.91,
+      "previous_close": 308.26,
+      "naive": 308.26,
+      "mean5": 310.876,
+      "drift": 308.4807,
+      "ar5": 306.7826
+    },
+    {
+      "date": "2026-08-12",
+      "actual": 302.25,
+      "previous_close": 304.91,
+      "naive": 304.91,
+      "mean5": 309.982,
+      "drift": 305.0731,
+      "ar5": 304.0191
+    },
+    {
+      "date": "2026-08-13",
+      "actual": 305.26,
+      "previous_close": 302.25,
+      "naive": 302.25,
+      "mean5": 308.232,
+      "drift": 302.3683,
+      "ar5": 302.0372
+    },
+    {
+      "date": "2026-08-14",
+      "actual": 305.93,
+      "previous_close": 305.26,
+      "naive": 305.26,
+      "mean5": 306.802,
+      "drift": 305.4234,
+      "ar5": 306.0627
+    },
+    {
+      "date": "2026-08-17",
+      "actual": 305.59,
+      "previous_close": 305.93,
+      "naive": 305.93,
+      "mean5": 305.322,
+      "drift": 306.1012,
+      "ar5": 308.0384
+    },
+    {
+      "date": "2026-08-18",
+      "actual": 310.03,
+      "previous_close": 305.59,
+      "naive": 305.59,
+      "mean5": 304.788,
+      "drift": 305.7535,
+      "ar5": 306.4863
+    },
+    {
+      "date": "2026-08-19",
+      "actual": 316.83,
+      "previous_close": 310.03,
+      "naive": 310.03,
+      "mean5": 305.812,
+      "drift": 310.2573,
+      "ar5": 310.6226
+    },
+    {
+      "date": "2026-08-20",
+      "actual": 311.3,
+      "previous_close": 316.83,
+      "naive": 316.83,
+      "mean5": 308.728,
+      "drift": 317.154,
+      "ar5": 317.1068
+    },
+    {
+      "date": "2026-08-21",
+      "actual": 309.35,
+      "previous_close": 311.3,
+      "naive": 311.3,
+      "mean5": 309.936,
+      "drift": 311.5391,
+      "ar5": 311.21
+    },
+    {
+      "date": "2026-08-24",
+      "actual": 310.34,
+      "previous_close": 309.35,
+      "naive": 309.35,
+      "mean5": 310.62,
+      "drift": 309.5579,
+      "ar5": 308.3019
+    },
+    {
+      "date": "2026-08-25",
+      "actual": 309.9,
+      "previous_close": 310.34,
+      "naive": 310.34,
+      "mean5": 311.57,
+      "drift": 310.5589,
+      "ar5": 309.2661
+    },
+    {
+      "date": "2026-08-26",
+      "actual": 313.45,
+      "previous_close": 309.9,
+      "naive": 309.9,
+      "mean5": 311.544,
+      "drift": 310.1097,
+      "ar5": 309.2772
+    },
+    {
+      "date": "2026-08-27",
+      "actual": 314.58,
+      "previous_close": 313.45,
+      "naive": 313.45,
+      "mean5": 310.868,
+      "drift": 313.7055,
+      "ar5": 315.2317
+    },
+    {
+      "date": "2026-08-28",
+      "actual": 319.7,
+      "previous_close": 314.58,
+      "naive": 314.58,
+      "mean5": 311.524,
+      "drift": 314.8473,
+      "ar5": 315.4612
+    },
+    {
+      "date": "2026-08-31",
+      "actual": 316.85,
+      "previous_close": 319.7,
+      "naive": 319.7,
+      "mean5": 313.594,
+      "drift": 320.032,
+      "ar5": 319.8801
+    },
+    {
+      "date": "2026-09-01",
+      "actual": 325.13,
+      "previous_close": 316.85,
+      "naive": 316.85,
+      "mean5": 314.896,
+      "drift": 317.1401,
+      "ar5": 316.9634
+    },
+    {
+      "date": "2026-09-02",
+      "actual": 324.96,
+      "previous_close": 325.13,
+      "naive": 325.13,
+      "mean5": 317.942,
+      "drift": 325.5239,
+      "ar5": 324.2507
+    },
+    {
+      "date": "2026-09-03",
+      "actual": 328.21,
+      "previous_close": 324.96,
+      "naive": 324.96,
+      "mean5": 320.244,
+      "drift": 325.3467,
+      "ar5": 325.4467
+    },
+    {
+      "date": "2026-09-04",
+      "actual": 319.97,
+      "previous_close": 328.21,
+      "naive": 328.21,
+      "mean5": 322.97,
+      "drift": 328.6329,
+      "ar5": 327.1459
+    },
+    {
+      "date": "2026-09-08",
+      "actual": 316.22,
+      "previous_close": 319.97,
+      "naive": 319.97,
+      "mean5": 323.024,
+      "drift": 320.2846,
+      "ar5": 320.4322
+    },
+    {
+      "date": "2026-09-09",
+      "actual": 315.34,
+      "previous_close": 316.22,
+      "naive": 316.22,
+      "mean5": 322.898,
+      "drift": 316.4844,
+      "ar5": 313.684
+    },
+    {
+      "date": "2026-09-10",
+      "actual": 326.57,
+      "previous_close": 315.34,
+      "naive": 315.34,
+      "mean5": 320.94,
+      "drift": 315.5905,
+      "ar5": 316.002
+    },
+    {
+      "date": "2026-09-11",
+      "actual": 332.27,
+      "previous_close": 326.57,
+      "naive": 326.57,
+      "mean5": 321.262,
+      "drift": 326.9528,
+      "ar5": 327.8666
+    },
+    {
+      "date": "2026-09-14",
+      "actual": 333.08,
+      "previous_close": 332.27,
+      "naive": 332.27,
+      "mean5": 322.074,
+      "drift": 332.7161,
+      "ar5": 336.0773
+    },
+    {
+      "date": "2026-09-15",
+      "actual": 331.34,
+      "previous_close": 333.08,
+      "naive": 333.08,
+      "mean5": 324.696,
+      "drift": 333.5304,
+      "ar5": 333.1799
+    },
+    {
+      "date": "2026-09-16",
+      "actual": 332.41,
+      "previous_close": 331.34,
+      "naive": 331.34,
+      "mean5": 327.72,
+      "drift": 331.7649,
+      "ar5": 330.2136
+    },
+    {
+      "date": "2026-09-17",
+      "actual": 337.0,
+      "previous_close": 332.41,
+      "naive": 332.41,
+      "mean5": 331.134,
+      "drift": 332.8423,
+      "ar5": 329.9404
+    },
+    {
+      "date": "2026-09-18",
+      "actual": 336.13,
+      "previous_close": 337.0,
+      "naive": 337.0,
+      "mean5": 333.22,
+      "drift": 337.4795,
+      "ar5": 337.0186
+    },
+    {
+      "date": "2026-09-21",
+      "actual": 338.98,
+      "previous_close": 336.13,
+      "naive": 336.13,
+      "mean5": 333.992,
+      "drift": 336.5944,
+      "ar5": 336.6621
+    },
+    {
+      "date": "2026-09-22",
+      "actual": 339.75,
+      "previous_close": 338.98,
+      "naive": 338.98,
+      "mean5": 335.172,
+      "drift": 339.4709,
+      "ar5": 339.3254
+    },
+    {
+      "date": "2026-09-23",
+      "actual": 337.02,
+      "previous_close": 339.75,
+      "naive": 339.75,
+      "mean5": 336.854,
+      "drift": 340.244,
+      "ar5": 340.1655
+    },
+    {
+      "date": "2026-09-24",
+      "actual": 335.92,
+      "previous_close": 337.02,
+      "naive": 337.02,
+      "mean5": 337.776,
+      "drift": 337.4789,
+      "ar5": 336.2977
+    },
+    {
+      "date": "2026-09-25",
+      "actual": 341.07,
+      "previous_close": 335.92,
+      "naive": 335.92,
+      "mean5": 337.56,
+      "drift": 336.3622,
+      "ar5": 336.2237
+    },
+    {
+      "date": "2026-09-28",
+      "actual": 338.4,
+      "previous_close": 341.07,
+      "naive": 341.07,
+      "mean5": 338.548,
+      "drift": 341.5622,
+      "ar5": 341.7395
+    },
+    {
+      "date": "2026-09-29",
+      "actual": 329.4,
+      "previous_close": 338.4,
+      "naive": 338.4,
+      "mean5": 338.432,
+      "drift": 338.8589,
+      "ar5": 339.2671
+    },
+    {
+      "date": "2026-09-30",
+      "actual": 333.02,
+      "previous_close": 329.4,
+      "naive": 329.4,
+      "mean5": 336.362,
+      "drift": 329.7604,
+      "ar5": 329.2783
+    },
+    {
+      "date": "2026-10-01",
+      "actual": 330.32,
+      "previous_close": 333.02,
+      "naive": 333.02,
+      "mean5": 335.562,
+      "drift": 333.414,
+      "ar5": 333.8675
+    },
+    {
+      "date": "2026-10-02",
+      "actual": 333.69,
+      "previous_close": 330.32,
+      "naive": 330.32,
+      "mean5": 334.442,
+      "drift": 330.6824,
+      "ar5": 331.071
+    },
+    {
+      "date": "2026-10-05",
+      "actual": 332.89,
+      "previous_close": 333.69,
+      "naive": 333.69,
+      "mean5": 332.966,
+      "drift": 334.0828,
+      "ar5": 334.9243
+    },
+    {
+      "date": "2026-10-06",
+      "actual": 333.63,
+      "previous_close": 332.89,
+      "naive": 332.89,
+      "mean5": 331.864,
+      "drift": 333.2709,
+      "ar5": 335.3819
+    },
+    {
+      "date": "2026-10-07",
+      "actual": 336.67,
+      "previous_close": 333.63,
+      "naive": 333.63,
+      "mean5": 332.71,
+      "drift": 334.0145,
+      "ar5": 333.1643
+    },
+    {
+      "date": "2026-10-08",
+      "actual": 340.42,
+      "previous_close": 336.67,
+      "naive": 336.67,
+      "mean5": 333.44,
+      "drift": 337.0805,
+      "ar5": 337.7376
+    },
+    {
+      "date": "2026-10-09",
+      "actual": 336.64,
+      "previous_close": 340.42,
+      "naive": 340.42,
+      "mean5": 335.46,
+      "drift": 340.8629,
+      "ar5": 340.5311
+    },
+    {
+      "date": "2026-10-12",
+      "actual": 340.97,
+      "previous_close": 336.64,
+      "naive": 336.64,
+      "mean5": 336.05,
+      "drift": 337.0423,
+      "ar5": 336.843
+    },
+    {
+      "date": "2026-10-13",
+      "actual": 341.27,
+      "previous_close": 340.97,
+      "naive": 340.97,
+      "mean5": 337.666,
+      "drift": 341.4097,
+      "ar5": 340.7505
+    },
+    {
+      "date": "2026-10-14",
+      "actual": 342.96,
+      "previous_close": 341.27,
+      "naive": 341.27,
+      "mean5": 339.194,
+      "drift": 341.7084,
+      "ar5": 341.6289
+    },
+    {
+      "date": "2026-10-15",
+      "actual": 342.0,
+      "previous_close": 342.96,
+      "naive": 342.96,
+      "mean5": 340.452,
+      "drift": 343.4101,
+      "ar5": 342.5616
+    },
+    {
+      "date": "2026-10-16",
+      "actual": 343.46,
+      "previous_close": 342.0,
+      "naive": 342.0,
+      "mean5": 340.768,
+      "drift": 342.437,
+      "ar5": 343.0523
+    },
+    {
+      "date": "2026-10-19",
+      "actual": 342.94,
+      "previous_close": 343.46,
+      "naive": 343.46,
+      "mean5": 342.132,
+      "drift": 343.9064,
+      "ar5": 342.9846
+    },
+    {
+      "date": "2026-10-20",
+      "actual": 339.5,
+      "previous_close": 342.94,
+      "naive": 342.94,
+      "mean5": 342.526,
+      "drift": 343.3776,
+      "ar5": 343.5287
+    },
+    {
+      "date": "2026-10-21",
+      "actual": 343.99,
+      "previous_close": 339.5,
+      "naive": 339.5,
+      "mean5": 342.172,
+      "drift": 339.9027,
+      "ar5": 339.4767
+    }
+  ]
+}
