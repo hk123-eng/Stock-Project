@@ -167,7 +167,7 @@
 - [x] 1d S3 raw/ event → `stock-archive-validator` (test object + 44-archive backfill: 44 ok)
 - [x] 1e Athena + Glue (`stock_project`, `stock-workgroup`), docs/athena-queries.md
 - [x] 1f 2 log metric filters (IngestErrors, IngestThrottles) + 2 dashboard widgets
-- [ ] 1g Cognito groups viewer/admin + GET /me
+- [x] 1g Cognito groups viewer/admin (0 members) + GET /me (401 without token; signed-in check pending your login)
 ### 2. Live Lambdas (window 19:00–09:30 ET only)
 - [ ] X-Ray active tracing (not stock-lstm-inference); state machine tracing parked (IAM JSON)
 - [ ] SNS message attributes — PARKED by owner decision A (2026-10-22)

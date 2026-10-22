@@ -1,0 +1,76 @@
+{
+    "Items": [
+        {
+            "ApiKeyRequired": false,
+            "AuthorizationType": "JWT",
+            "AuthorizerId": "nyril5",
+            "RouteId": "7zyitk5",
+            "RouteKey": "GET /alerts",
+            "Target": "integrations/bp6k0pq"
+        },
+        {
+            "ApiKeyRequired": false,
+            "AuthorizationType": "JWT",
+            "AuthorizerId": "nyril5",
+            "RouteId": "8fy1go5",
+            "RouteKey": "GET /prices/latest",
+            "Target": "integrations/bp6k0pq"
+        },
+        {
+            "ApiKeyRequired": false,
+            "AuthorizationType": "JWT",
+            "AuthorizerId": "nyril5",
+            "RouteId": "cmt8e7f",
+            "RouteKey": "GET /prices/synthetic",
+            "Target": "integrations/bp6k0pq"
+        },
+        {
+            "ApiKeyRequired": false,
+            "AuthorizationType": "JWT",
+            "AuthorizerId": "nyril5",
+            "RouteId": "dzyytc1",
+            "RouteKey": "GET /evaluation",
+            "Target": "integrations/bp6k0pq"
+        },
+        {
+            "ApiKeyRequired": false,
+            "AuthorizationType": "JWT",
+            "AuthorizerId": "nyril5",
+            "RouteId": "mu2bo67",
+            "RouteKey": "GET /predictions",
+            "Target": "integrations/bp6k0pq"
+        },
+        {
+            "ApiKeyRequired": false,
+            "AuthorizationType": "JWT",
+            "AuthorizerId": "nyril5",
+            "RouteId": "q6sel6e",
+            "RouteKey": "GET /signals",
+            "Target": "integrations/bp6k0pq"
+        },
+        {
+            "ApiKeyRequired": false,
+            "AuthorizationType": "JWT",
+            "AuthorizerId": "nyril5",
+            "RouteId": "quv1k2q",
+            "RouteKey": "GET /model-health",
+            "Target": "integrations/bp6k0pq"
+        },
+        {
+            "ApiKeyRequired": false,
+            "AuthorizationType": "JWT",
+            "AuthorizerId": "nyril5",
+            "RouteId": "r530xki",
+            "RouteKey": "GET /prices",
+            "Target": "integrations/bp6k0pq"
+        },
+        {
+            "ApiKeyRequired": false,
+            "AuthorizationType": "JWT",
+            "AuthorizerId": "nyril5",
+            "RouteId": "t053u5r",
+            "RouteKey": "GET /predictions/latest",
+            "Target": "integrations/bp6k0pq"
+        }
+    ]
+}

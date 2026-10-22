@@ -10,6 +10,7 @@ GET /alerts              trading days on which an alert was raised
 GET /evaluation          latest model evaluation report (S3 predictions/evaluation/<SYMBOL>-latest.json)
 GET /model-health        live scored predictions (stored by stock-evaluate) vs the naive baseline;
                          verdict is "insufficient data" until 20 days are scored
+GET /me                  the caller's email and cognito:groups, read from the verified JWT claims
 
 Query parameters: symbol (default AAPL; allow-listed watchlist AAPL MSFT GOOGL AMZN NVDA), limit (1-500).
 Only MODEL_SYMBOLS (AAPL) have a model: the prediction/evaluation/model-health routes return
@@ -17,6 +18,7 @@ Only MODEL_SYMBOLS (AAPL) have a model: the prediction/evaluation/model-health r
 """
 import json
 import os
+import re
 from decimal import Decimal
 
 import boto3
@@ -209,6 +211,26 @@ def evaluation(symbol, _):
     return json.loads(obj["Body"].read())
 
 
+def _groups(raw):
+    """cognito:groups as a list. HTTP API passes array claims as a string such as "[admin viewer]"."""
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return [str(g) for g in raw]
+    raw = str(raw).strip()
+    if raw.startswith("[") and raw.endswith("]"):
+        raw = raw[1:-1]
+    return [g for g in re.split(r"[\s,]+", raw) if g]
+
+
+def me(event):
+    """Only the email and group claims are returned; nothing is looked up or stored."""
+    claims = (((event.get("requestContext") or {}).get("authorizer") or {}).get("jwt") or {}).get("claims")
+    if not claims:
+        return _resp(401, {"error": "no verified token claims"})
+    return _resp(200, {"email": claims.get("email"), "cognito:groups": _groups(claims.get("cognito:groups"))})
+
+
 ROUTES = {
     "/prices": prices, "/prices/latest": latest_price, "/prices/synthetic": synthetic_prices,
     "/predictions": predictions, "/predictions/latest": latest_prediction,
@@ -223,9 +245,11 @@ def lambda_handler(event, context):
         path = path[len("/prod"):]
     if method != "GET":
         return _resp(405, {"error": "method not allowed"})
+    if (path.rstrip("/") or "/") == "/me":
+        return me(event)
     handler = ROUTES.get(path.rstrip("/") or "/")
     if not handler:
-        return _resp(404, {"error": "not found", "routes": sorted(ROUTES)})
+        return _resp(404, {"error": "not found", "routes": sorted(ROUTES) + ["/me"]})
     qs = event.get("queryStringParameters") or {}
     symbol = (qs.get("symbol") or "AAPL").upper()
     if symbol not in SYMBOLS:

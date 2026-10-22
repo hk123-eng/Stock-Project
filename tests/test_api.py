@@ -85,5 +85,26 @@ class TestWatchlistRouting(unittest.TestCase):
         self.assertEqual(json.loads(r["body"])["model_status"], "experimental, does not beat baseline")
 
 
+class TestMe(unittest.TestCase):
+    def _me(self, claims):
+        e = ev("/me")
+        if claims is not None:
+            e["requestContext"]["authorizer"] = {"jwt": {"claims": claims}}
+        return api.lambda_handler(e, None)
+
+    def test_email_and_groups_from_claims_only(self):
+        r = self._me({"email": "a@example.com", "cognito:groups": "[admin viewer]", "sub": "s", "custom:x": "y"})
+        self.assertEqual(r["statusCode"], 200)
+        self.assertEqual(json.loads(r["body"]), {"email": "a@example.com", "cognito:groups": ["admin", "viewer"]})
+
+    def test_no_groups_and_list_form(self):
+        self.assertEqual(json.loads(self._me({"email": "b@example.com"})["body"])["cognito:groups"], [])
+        self.assertEqual(json.loads(self._me({"email": "c@example.com", "cognito:groups": ["viewer"]})["body"])["cognito:groups"], ["viewer"])
+
+    def test_without_claims_is_401_and_no_symbol_needed(self):
+        self.assertEqual(self._me(None)["statusCode"], 401)
+        self.assertEqual(self._me({"email": "d@example.com"})["statusCode"], 200)  # no symbol query parameter
+
+
 if __name__ == "__main__":
     unittest.main()
