@@ -1,0 +1,7 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "XRayWriteForActiveTracing", "Effect": "Allow",
+     "Action": ["xray:PutTraceSegments", "xray:PutTelemetryRecords"], "Resource": "*"}
+  ]
+}

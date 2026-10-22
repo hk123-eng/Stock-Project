@@ -294,3 +294,35 @@ Work order from the owner (2026-10-22). Decisions on "go": **A** SNS message att
 - Tests: `infra/apigateway/route_tests.py` (direct invoke) — all 9 data routes, 404/400/405 cases and `/me` with/without claims: **16/16 OK**. Over HTTPS: `/me` and `/prices` without a token → 401, garbage token → 401, forged unsigned token claiming group admin → 401, `POST /me` → 404.
 - Not tested: `/me` with a real signed-in token (needs the owner's login; the deploy user does not create users or passwords).
 - A transient "Could not connect to the endpoint URL" error hit the first attempt; nothing was created by it (verified: 9 routes before the retry).
+
+## Items 2 and 3 — prepared, NOT deployed (window closed at 2026-10-22 14:13 UTC = 10:13 ET)
+Owner rule: deploy/test only **19:00 ET → 09:30 ET next day** (04:30 → 19:00 IST), never 16:00–18:30 ET. `infra/time_guard.py --strict` enforces it (weekdays: 09:30–19:00 ET blocked; tests in `tests/test_time_guard.py`) and every item 2/3 script and `run_test.py` now call it with `--strict`.
+**Next window: Thu 2026-10-22 19:00 ET = 23:00 UTC = Fri 2026-10-23 04:30 IST, until Fri 09:30 ET = 13:30 UTC = 19:00 IST.**
+
+Read-only facts checked for the preparation (2026-10-22 ~14:15 UTC): live definition == `stock-prediction-pipeline.watchlist.asl.json`; state machine tracing disabled, logging OFF; API integration `bp6k0pq` → unqualified `function:stock-api` (payload 2.0); existing invoke permission source ARN `…:sjdmkf8iag/*/GET/*`; all eight target function roles carry StockRoleBoundary (v3 allows `xray:PutTraceSegments`/`PutTelemetryRecords`); `stock-lstm-inference-role` and `stock-prediction-sfn-role` have no boundary and are not touched.
+
+### Item 2 (ready)
+- **2a X-Ray** — `bash infra/xray/enable-tracing.sh`: saves each function configuration, adds a separate inline policy `stock-xray-write` (`infra/xray/stock-xray-write-policy.json`) to the roles of `stock-ingest`, `stock-signals`, `stock-evaluate`, `stock-alert-digest`, `stock-api`, `stock-event-logger`, `stock-stream-handler`, `stock-archive-validator`, then sets `TracingConfig Mode=Active`. Excluded: `stock-lstm-inference` (owner rule) and the legacy `stock-db-seeder`. Rollback: `bash infra/xray/rollback-tracing.sh` (PassThrough).
+- **HTTP API and X-Ray:** not supported. AWS "Choose between REST APIs and HTTP APIs" page, Monitoring table, row "AWS X-Ray tracing": REST API Yes, HTTP API No (checked 2026-10-22).
+- **State machine tracing — PARKED** (needs a policy on the protected `stock-prediction-sfn-role`; then `aws stepfunctions update-state-machine --tracing-configuration enabled=true`, which `stock-project` may do). Ready-to-paste inline policy for **you** to add to `stock-prediction-sfn-role`:
+  ```json
+  {"Version": "2012-10-17", "Statement": [{"Sid": "StockSfnXRay", "Effect": "Allow",
+    "Action": ["xray:PutTraceSegments", "xray:PutTelemetryRecords", "xray:GetSamplingRules", "xray:GetSamplingTargets"],
+    "Resource": "*"}]}
+  ```
+- **2b SNS message attributes — PARKED** by owner decision A (2026-10-22). Note for later: alerts are published by the state machine task `PublishDigest`, not by a Lambda, so this needs a definition change.
+- **2c alias `live` for `stock-api`** — `bash infra/lambda/stock-api-alias.sh`: saves the integration and function policy, publishes a version (the `/me` code), creates alias `live`, adds an invoke permission for that qualifier (same source-ARN pattern `…/*/GET/*`), repoints integration `bp6k0pq` to `function:stock-api:live`. Then `python infra/apigateway/route_tests.py live` (16 direct-invoke checks against the alias) + HTTPS 401 checks. Rollback commands (`infra/lambda/stock-api-alias-rollback.sh`):
+  ```bash
+  aws apigatewayv2 update-integration --api-id sjdmkf8iag --integration-id bp6k0pq \
+    --integration-uri arn:aws:lambda:ap-south-1:542601847637:function:stock-api --profile stock-project --region ap-south-1
+  # code rollback instead: aws lambda update-alias --function-name stock-api --name live --function-version 2
+  ```
+- Then ONE full pipeline test: `python infra/stepfunctions/run_test.py xray '{"symbols":["AAPL","MSFT","GOOGL","AMZN","NVDA"]}'` (5 Alpha Vantage calls), verify SUCCEEDED and traces in X-Ray. Two failures → rollback scripts, park.
+
+### Item 3 (ready)
+- Field names checked in real outputs: ingest returns `inserted`, `updated`, `unchanged` (all scheduled runs since 2026-10-16: `inserted 1, updated 1, unchanged 98`).
+- `build_definition.py --parallel` → `stock-prediction-pipeline.parallel.asl.json` (AWS `validate-state-machine-definition`: **OK, 0 diagnostics**). Per ticker: `CheckIngest` → `CheckNewData` (skip only if `inserted` AND `updated` are present, numeric and 0) → `RouteModel` (unchanged) → `Predict` (AAPL only, unchanged) → Parallel `SignalsAndScore` (branch 1 `ComputeSignals`; branch 2 `ScorePredictions` for AAPL, empty for others; each branch catches its own errors so neither can cancel the other) → `MergeBranches` → signals failure → `TickerSignalsFailed`, score failure → `TickerScoreFailed`, else `TickerDone`. Skip path: `NoNewData` → score only (AAPL) → `TickerNoNewData` (`ok: true`, `skipped: "no new or updated rows"`, prediction recorded as `{"statusCode": 200, "skipped": true}` so the unchanged digest does not print the "suspicious price jump" note).
+- **Alert path unchanged:** test asserts ValidateInput, Map settings, BuildDigest, DigestNeeded, PublishDigest, PublishFailure and all per-ticker failure states are byte-identical to the live watchlist definition; `src/digest` and `src/signals` are not modified.
+- Tests `tests/test_state_machine_parallel.py` (8): generator == committed file, transitions in scope and unique names, alert path unchanged, skip rule (both counts zero, no OR), skip path reaches no Predict/Signals, branch error isolation, AAPL-only predict/score, digest on a skipped ticker sends nothing and mentions no jump.
+- Deploy: `bash infra/stepfunctions/switch-to-parallel.sh` (saves the live definition to `stock-prediction-pipeline.pre-parallel.asl.json`; schedule unchanged). Rollback: `bash infra/stepfunctions/rollback-parallel.sh`.
+- Test plan: a 5-ticker test after the scheduled run has ingested the day will see `inserted 0` and, if the volume is already final, `updated 0` → exercises the skip path. The parallel path is exercised by the next scheduled run (Fri 2026-10-23 18:30 ET) or by any test where a bar was updated. **Alpha Vantage budget:** item 2 test 5 calls + item 3 test 5 calls = my 10 for that ET day (scheduled run 5 → 15 of 25 on the key); a retry after a failure waits for the next ET day.

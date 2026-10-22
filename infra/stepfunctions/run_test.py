@@ -18,7 +18,7 @@ SM = "arn:aws:states:ap-south-1:542601847637:stateMachine:stock-prediction-pipel
 def main():
     suffix, payload = sys.argv[1], sys.argv[2]
     json.loads(payload)
-    if subprocess.run([sys.executable, str(ROOT / "infra" / "time_guard.py")]).returncode:
+    if subprocess.run([sys.executable, str(ROOT / "infra" / "time_guard.py"), "--strict"]).returncode:
         sys.exit("refusing: protected time window")
     sfn = boto3.Session(profile_name="stock-project", region_name="ap-south-1").client("stepfunctions")
     name = f"test-{suffix}-{time.strftime('%Y%m%dT%H%M%S', time.gmtime())}"
@@ -35,7 +35,7 @@ def main():
         ing, pred, sig, sc = (t.get(k) or {} for k in ("ingest", "prediction", "signals", "score"))
         dq = ing.get("data_quality") or {}
         print(json.dumps({
-            "symbol": t.get("symbol"), "ok": t.get("ok"), "failed_step": t.get("failed_step"),
+            "symbol": t.get("symbol"), "ok": t.get("ok"), "skipped": t.get("skipped"), "failed_step": t.get("failed_step"),
             "error": (t.get("error") or "")[:200] or None,
             "ingest": {k: ing.get(k) for k in ("inserted", "updated", "unchanged", "first_trade_date", "latest_trade_date")},
             "jumps_in_window": dq.get("jumps_in_window"), "new_jumps": dq.get("new_jumps_count"),

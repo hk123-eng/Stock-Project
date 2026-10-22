@@ -365,10 +365,117 @@ def build_watchlist():
     }
 
 
+# ---------------------------------------------------------------------------
+# Final run item 3 (2026-10-22): per ticker, Signals and Score run in parallel, and Predict + Signals
+# are skipped when ingest reports inserted == 0 AND updated == 0 (owner decision B). Alerts unchanged.
+# ---------------------------------------------------------------------------
+SKIP_REASON = "no new or updated rows"
+
+
+def _zero(path):
+    return [{"Variable": path, "IsPresent": True}, {"Variable": path, "IsNumeric": True},
+            {"Variable": path, "NumericEquals": 0}]
+
+
+def _branch_task(name, fn, payload, step, ok_state, fail_state):
+    """Task inside a Parallel branch: every error is caught INSIDE the branch, so the Parallel state
+    itself never fails and one branch can never cancel the other."""
+    check = f"Check{step.title()}Branch"
+    t = lambda_task(fn, payload, f"$.{step}", check)
+    t["Catch"] = [{"ErrorEquals": ["States.ALL"], "ResultPath": f"$.{step}.result", "Next": fail_state}]
+    return {name: t, check: status_ok(f"$.{step}.result", ok_state, fail_state)}
+
+
+def _branch_out(step, failed):
+    return {"Type": "Pass", "Parameters": {"result.$": f"$.{step}.result", "failed": failed}, "End": True}
+
+
+def ticker_processor_parallel():
+    base = ticker_processor()
+    st = base["States"]
+    is_model = is_one_of("$.symbol", MODEL_SYMBOLS)
+    # remove the sequential tail; everything before CheckIngest/RouteModel/Predict stays identical
+    for name in ("ComputeSignals", "CheckSignals", "RouteScore", "ScorePredictions", "CheckScore"):
+        del st[name]
+    st["CheckIngest"] = status_ok("$.ingest.result", "CheckNewData", "TickerIngestFailed")
+    st["CheckNewData"] = {
+        "Type": "Choice",
+        # skip only when BOTH counts are present, numeric and zero; anything else runs the full path
+        "Choices": [{"And": _zero("$.ingest.result.inserted") + _zero("$.ingest.result.updated"), "Next": "NoNewData"}],
+        "Default": "RouteModel",
+    }
+    st["RouteModel"]["Default"] = "SignalsAndScore"
+    st["CheckPrediction"] = status_ok("$.prediction.result", "SignalsAndScore", "TickerPredictionFailed")
+    # state names are unique across the whole machine (also inside Parallel branches)
+    signals_branch = {"StartAt": "ComputeSignals", "States": {
+        **_branch_task("ComputeSignals", "stock-signals",
+                       {"symbol.$": "$.symbol", "prediction.$": "$.prediction.result", "execution_id.$": "$$.Execution.Id"},
+                       "signals", "SignalsBranchOk", "SignalsBranchFailed"),
+        "SignalsBranchOk": _branch_out("signals", False),
+        "SignalsBranchFailed": _branch_out("signals", True),
+    }}
+    score_branch = {"StartAt": "RouteScoreBranch", "States": {
+        "RouteScoreBranch": {"Type": "Choice", "Choices": [dict(is_model, Next="ScorePredictions")], "Default": "NoScoreBranch"},
+        **_branch_task("ScorePredictions", "stock-evaluate", {"symbol.$": "$.symbol"}, "score", "ScoreBranchOk", "ScoreBranchFailed"),
+        "ScoreBranchOk": _branch_out("score", False),
+        "ScoreBranchFailed": _branch_out("score", True),
+        "NoScoreBranch": {"Type": "Pass", "Parameters": {"result": {}, "failed": False}, "End": True},
+    }}
+    st["SignalsAndScore"] = {
+        "Type": "Parallel",
+        "Branches": [signals_branch, score_branch],
+        "ResultPath": "$.branches",
+        # branches catch their own errors; this only covers a failure of the Parallel state itself
+        "Catch": [{"ErrorEquals": ["States.ALL"], "ResultPath": "$.signals.result", "Next": "TickerSignalsFailed"}],
+        "Next": "MergeBranches",
+    }
+    st["MergeBranches"] = {
+        "Type": "Pass",
+        "Parameters": {"symbol.$": "$.symbol", "ingest.$": "$.ingest", "prediction.$": "$.prediction",
+                       "signals": {"result.$": "$.branches[0].result"}, "score": {"result.$": "$.branches[1].result"},
+                       "signals_failed.$": "$.branches[0].failed", "score_failed.$": "$.branches[1].failed"},
+        "Next": "RouteAfterBranches",
+    }
+    st["RouteAfterBranches"] = {
+        "Type": "Choice",
+        "Choices": [{"Variable": "$.signals_failed", "BooleanEquals": True, "Next": "TickerSignalsFailed"},
+                    {"Variable": "$.score_failed", "BooleanEquals": True, "Next": "TickerScoreFailed"}],
+        "Default": "TickerDone",
+    }
+    # no new or updated rows: no prediction, no signals; scoring still runs for model symbols (harmless, idempotent)
+    st["NoNewData"] = {"Type": "Choice", "Choices": [dict(is_model, Next="ScoreNoNewData")], "Default": "TickerNoNewData"}
+    t = lambda_task("stock-evaluate", {"symbol.$": "$.symbol"}, "$.score", "CheckScoreNoNewData")
+    t["Catch"] = [{"ErrorEquals": ["States.ALL"], "ResultPath": "$.score.result", "Next": "TickerScoreFailed"}]
+    st["ScoreNoNewData"] = t
+    st["CheckScoreNoNewData"] = status_ok("$.score.result", "TickerNoNewData", "TickerScoreFailed")
+    st["TickerNoNewData"] = {
+        "Type": "Pass",
+        "Parameters": {"symbol.$": "$.symbol", "ok": True, "skipped": SKIP_REASON, "ingest.$": "$.ingest.result",
+                       # statusCode 200 + skipped: the digest must not report a "suspicious jump" for a skipped run
+                       "prediction": {"statusCode": 200, "skipped": True, "reason": SKIP_REASON},
+                       "signals": {}, "score.$": "$.score.result"},
+        "End": True,
+    }
+    return base
+
+
+def build_parallel():
+    d = build_watchlist()
+    d["States"]["ProcessWatchlist"]["ItemProcessor"] = ticker_processor_parallel()
+    d["Comment"] = d["Comment"].replace(
+        "-> signals (per-type dedup) -> score saved predictions.",
+        "-> signals (per-type dedup) and scoring of saved predictions in parallel; prediction and signals are "
+        "skipped when ingest reports no new and no updated rows.")
+    return d
+
+
 if __name__ == "__main__":
     import sys
     here = os.path.dirname(__file__)
-    if "--watchlist" in sys.argv:
+    if "--parallel" in sys.argv:
+        out = os.path.join(here, "stock-prediction-pipeline.parallel.asl.json")
+        definition, label = build_parallel(), "parallel"
+    elif "--watchlist" in sys.argv:
         out = os.path.join(here, "stock-prediction-pipeline.watchlist.asl.json")
         definition, label = build_watchlist(), "watchlist"
     else:

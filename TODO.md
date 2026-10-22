@@ -169,11 +169,11 @@
 - [x] 1f 2 log metric filters (IngestErrors, IngestThrottles) + 2 dashboard widgets
 - [x] 1g Cognito groups viewer/admin (0 members) + GET /me (401 without token; signed-in check pending your login)
 ### 2. Live Lambdas (window 19:00–09:30 ET only)
-- [ ] X-Ray active tracing (not stock-lstm-inference); state machine tracing parked (IAM JSON)
+- [ ] X-Ray active tracing — READY (`infra/xray/enable-tracing.sh`); HTTP API: not supported (AWS docs); state machine tracing PARKED (IAM JSON in run report)
 - [ ] SNS message attributes — PARKED by owner decision A (2026-10-22)
-- [ ] `stock-api` alias `live` + API integration repoint + route tests
+- [ ] `stock-api` alias `live` — READY (`infra/lambda/stock-api-alias.sh`, rollback script, `infra/apigateway/route_tests.py`)
 ### 3. State machine (window 19:00–09:30 ET only)
-- [ ] Parallel Signals ‖ Score per ticker; skip Predict + Signals when inserted == 0 and updated == 0 (decision B)
+- [ ] Parallel Signals ‖ Score + skip when inserted == 0 and updated == 0 — READY (`--parallel`, validated OK, 8 tests; `switch-to-parallel.sh`)
 ### 4–7
 - [ ] SFN logging: IAM JSON shown to owner; enable ERROR logging + 30-day retention after confirmation
 - [ ] Local baseline benchmark → docs/model-evaluation.md
