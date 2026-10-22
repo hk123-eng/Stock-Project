@@ -1,0 +1,21 @@
+{
+  "LambdaFunctionConfigurations": [
+    {
+      "Id": "stock-archive-validator-raw",
+      "LambdaFunctionArn": "arn:aws:lambda:ap-south-1:542601847637:function:stock-archive-validator",
+      "Events": [
+        "s3:ObjectCreated:*"
+      ],
+      "Filter": {
+        "Key": {
+          "FilterRules": [
+            {
+              "Name": "Prefix",
+              "Value": "raw/"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

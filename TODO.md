@@ -164,7 +164,7 @@
 - [x] 1b EventBridge bus `stock-events` + rule `stock-events-log-all` → `stock-event-logger` (test event logged)
 - [x] 1c Stream on stock-prices (NEW_IMAGE) + `stock-stream-handler` (filtered ESM; direct-invoke test OK)
 - [ ] 1c Observe a real INSERT → PriceIngested in the logger log (after the 2026-10-22 22:30 UTC scheduled run)
-- [ ] 1d S3 raw/ event → `stock-archive-validator`
+- [x] 1d S3 raw/ event → `stock-archive-validator` (test object + 44-archive backfill: 44 ok)
 - [ ] 1e Athena + Glue (`stock_project`, `stock-workgroup`), docs/athena-queries.md
 - [ ] 1f ≤2 log metric filters + dashboard widgets
 - [ ] 1g Cognito groups viewer/admin + GET /me

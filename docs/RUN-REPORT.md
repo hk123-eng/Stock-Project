@@ -260,3 +260,12 @@ Work order from the owner (2026-10-22). Decisions on "go": **A** SNS message att
 
 ### Repository fix
 `tests/secret_scan.py` was excluded by the `.gitignore` pattern `*secret*`, so the CI workflow would have failed on GitHub. Added `!tests/secret_scan.py`.
+
+### 1d S3 `raw/` event → `stock-archive-validator` — done 2026-10-22 12:54 UTC
+- Bucket notification configuration before the change: **empty** (`{}`), saved as `infra/rollback/2026-10-22/raw-bucket-notification-before.json`. `infra/s3/merge_notification.py` merges the new rule into whatever exists (keeps all other entries); applied `infra/s3/raw-bucket-notification.json`: `s3:ObjectCreated:*`, prefix `raw/` → `stock-archive-validator`. Rollback: `aws s3api put-bucket-notification-configuration --bucket stock-prediction-raw-542601847637-ap-south-1-an --notification-configuration file://infra/rollback/2026-10-22/raw-bucket-notification-before.json`.
+- Lambda `stock-archive-validator` (`src/archive_validator/`, python3.12 arm64 128 MB, 60 s), role `stock-archive-validator-role` (boundary; `s3:GetObject` on `raw/*`, `s3:PutObject` on `manifests/*` only, own logs). Lambda permission: `s3.amazonaws.com`, source ARN = the bucket, source account.
+- Checks per archive: JSON parses; `Meta Data` and `Time Series (Daily)` present; symbol matches the key; every day has numeric OHLCV; **no API key and no URL** (`api_?key`, `https?://`, `alphavantage.co`; only the finding names are stored, never the matched text). Writes one single-line JSON manifest to `manifests/<path after raw/>.manifest.json` with the checks and the parsed daily rows (so Athena can read it). Code refuses to write under `raw/`; the trigger prefix `raw/` does not cover `manifests/`, so it cannot trigger itself.
+- Live test: labelled object `raw/_test/validator-test-20261022.json` (symbol TEST, "NOT market data") → S3 event → manifest `manifests/_test/validator-test-20261022.json.manifest.json`, status ok. **Both objects are on the cleanup list.**
+- Backfill (direct invoke, 3 batches): all **44** existing `raw/alphavantage/` archives validated, **44 ok, 0 failed** (no key/URL found in any archive) → 44 manifests under `manifests/alphavantage/` (531,908 bytes).
+- From the next scheduled run, each ingest archive (5 per weekday) is validated automatically.
+- Unit tests `tests/test_archive_validator.py` (7).
