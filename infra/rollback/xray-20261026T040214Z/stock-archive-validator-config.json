@@ -1,0 +1,43 @@
+{
+    "FunctionName": "stock-archive-validator",
+    "FunctionArn": "arn:aws:lambda:ap-south-1:542601847637:function:stock-archive-validator",
+    "Runtime": "python3.12",
+    "Role": "arn:aws:iam::542601847637:role/stock-archive-validator-role",
+    "Handler": "lambda_function.lambda_handler",
+    "CodeSize": 2382,
+    "Description": "Validates raw/ archives, writes manifests/ (never raw/)",
+    "Timeout": 60,
+    "MemorySize": 128,
+    "LastModified": "2026-10-22T12:53:44.494+0000",
+    "CodeSha256": "RYHLwkcqEL6SUMyLjzerf26/4hEMr7VyJl1+OeDkfW4=",
+    "Version": "$LATEST",
+    "Environment": {
+        "Variables": {
+            "RAW_BUCKET": "stock-prediction-raw-542601847637-ap-south-1-an"
+        }
+    },
+    "TracingConfig": {
+        "Mode": "PassThrough"
+    },
+    "RevisionId": "0ed9d1e2-5414-4bc7-a82b-e6f3401e6a76",
+    "State": "Active",
+    "LastUpdateStatus": "Successful",
+    "PackageType": "Zip",
+    "Architectures": [
+        "arm64"
+    ],
+    "EphemeralStorage": {
+        "Size": 512
+    },
+    "SnapStart": {
+        "ApplyOn": "None",
+        "OptimizationStatus": "Off"
+    },
+    "RuntimeVersionConfig": {
+        "RuntimeVersionArn": "arn:aws:lambda:ap-south-1::runtime:0fec05b8b43b0ecfbabe4fd585b35e423f655861556712f8a10b0e8739c36c07"
+    },
+    "LoggingConfig": {
+        "LogFormat": "Text",
+        "LogGroup": "/aws/lambda/stock-archive-validator"
+    }
+}

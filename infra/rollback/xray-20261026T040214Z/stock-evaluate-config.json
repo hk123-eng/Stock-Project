@@ -1,0 +1,38 @@
+{
+    "FunctionName": "stock-evaluate",
+    "FunctionArn": "arn:aws:lambda:ap-south-1:542601847637:function:stock-evaluate",
+    "Runtime": "python3.12",
+    "Role": "arn:aws:iam::542601847637:role/stock-evaluate-role",
+    "Handler": "lambda_function.lambda_handler",
+    "CodeSize": 2161,
+    "Description": "Score saved predictions vs next real close (model + naive baseline)",
+    "Timeout": 60,
+    "MemorySize": 128,
+    "LastModified": "2026-10-06T16:33:51.111+0000",
+    "CodeSha256": "z/wkVKbhp5EXuW2vncvG5kjUnDugldO/89WYgsZz9+U=",
+    "Version": "$LATEST",
+    "TracingConfig": {
+        "Mode": "PassThrough"
+    },
+    "RevisionId": "f50ce391-ec4d-4a46-9e1c-6c20fd9e5277",
+    "State": "Active",
+    "LastUpdateStatus": "Successful",
+    "PackageType": "Zip",
+    "Architectures": [
+        "arm64"
+    ],
+    "EphemeralStorage": {
+        "Size": 512
+    },
+    "SnapStart": {
+        "ApplyOn": "None",
+        "OptimizationStatus": "Off"
+    },
+    "RuntimeVersionConfig": {
+        "RuntimeVersionArn": "arn:aws:lambda:ap-south-1::runtime:0fec05b8b43b0ecfbabe4fd585b35e423f655861556712f8a10b0e8739c36c07"
+    },
+    "LoggingConfig": {
+        "LogFormat": "Text",
+        "LogGroup": "/aws/lambda/stock-evaluate"
+    }
+}

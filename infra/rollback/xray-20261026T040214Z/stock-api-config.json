@@ -1,0 +1,38 @@
+{
+    "FunctionName": "stock-api",
+    "FunctionArn": "arn:aws:lambda:ap-south-1:542601847637:function:stock-api",
+    "Runtime": "python3.12",
+    "Role": "arn:aws:iam::542601847637:role/stock-api-role",
+    "Handler": "lambda_function.lambda_handler",
+    "CodeSize": 4527,
+    "Description": "Read-only dashboard API (prices, predictions, signals, alerts, evaluation)",
+    "Timeout": 15,
+    "MemorySize": 256,
+    "LastModified": "2026-10-22T13:01:51.000+0000",
+    "CodeSha256": "XYfDNDxWvLkt37pXdAuR3MvkAn9AnbpZHw6O/37ggCk=",
+    "Version": "$LATEST",
+    "TracingConfig": {
+        "Mode": "PassThrough"
+    },
+    "RevisionId": "8799d8a8-2387-4e9a-964d-d7c6d712b12e",
+    "State": "Active",
+    "LastUpdateStatus": "Successful",
+    "PackageType": "Zip",
+    "Architectures": [
+        "arm64"
+    ],
+    "EphemeralStorage": {
+        "Size": 512
+    },
+    "SnapStart": {
+        "ApplyOn": "None",
+        "OptimizationStatus": "Off"
+    },
+    "RuntimeVersionConfig": {
+        "RuntimeVersionArn": "arn:aws:lambda:ap-south-1::runtime:0fec05b8b43b0ecfbabe4fd585b35e423f655861556712f8a10b0e8739c36c07"
+    },
+    "LoggingConfig": {
+        "LogFormat": "Text",
+        "LogGroup": "/aws/lambda/stock-api"
+    }
+}

@@ -12,7 +12,7 @@
 |---|---|---|
 | 1 | `docs/architecture.md` diagram | "Serverless pipeline in Mumbai: Scheduler → Step Functions (a Map over a 5-ticker watchlist) → five Lambdas → DynamoDB/S3 → one combined SNS email, plus a Cognito-protected API and dashboard." |
 | 2 | EventBridge Scheduler → `stock-daily-pipeline` | "Runs Mon–Fri 18:30 New York time, after the US close, with input `{"symbols":["AAPL","MSFT","GOOGL","AMZN","NVDA"]}`; failed starts go to the SQS dead-letter queue." |
-| 3 | Step Functions → open the latest scheduled execution (or start one with `{"symbols":["AAPL","NVDA"]}` = 2 API calls) → graph view | The Map runs one ticker at a time with a 15 s pause. Open an IngestPrices output: `unchanged 100` shows idempotency; `data_quality` shows the split/jump check. Only AAPL goes through Predict. |
+| 3 | Step Functions → open the latest scheduled execution (or start one with `{"symbols":["AAPL","NVDA"]}` = 2 API calls) → graph view | The Map runs one ticker at a time with a 15 s pause. Open an IngestPrices output: `unchanged 100` shows idempotency; `data_quality` shows the split/jump check. Only AAPL goes through Predict; Signals and Score run as a Parallel state. A repeat run with nothing new takes the skip path (`skipped: "no new or updated rows"`, e.g. `test-parallel-20261026T040642`). |
 | 3b | Start an execution with `{"symbols":["AAPL","ZZZZ"]}` | AAPL is processed; ZZZZ fails alone; the run SUCCEEDS and the email subject says "1 FAILED". |
 | 4 | Start an execution with `{}` | Goes ValidateInput → InvalidInput → PublishFailure; show the failure email. "Before, this was an unhandled `States.Runtime` error with no alert." |
 | 5 | CloudWatch → Alarms → `stock-pipeline-failed-executions` | "Safety net: any failed, timed-out or aborted run alerts by email, even errors the workflow can't catch." |
@@ -20,7 +20,9 @@
 | 7 | S3 `raw/alphavantage/…` | "Raw API responses archived for audit; the API key is never stored or logged." |
 | 8 | Dashboard → sign in (Cognito hosted UI) | Latest close, prediction (with out-of-range warning, labelled experimental), signals incl. MACD and Bollinger %B, alerts, prediction history. Tick "Show Bollinger bands". |
 | 8b | Ticker selector → NVDA | "Prices and signals only; no validated model": the prediction panels are hidden and the API returns 404 for model routes. |
-| 8c | CloudWatch → Dashboards → `stock-project` | Executions, tickers processed/failed, DLQ depth, Lambda errors, API traffic, AAPL model vs naive error. |
+| 8c | CloudWatch → Dashboards → `stock-project` | Executions, tickers processed/failed, DLQ depth, Lambda errors, API traffic, AAPL model vs naive error, ingest errors/throttles. |
+| 8d | CloudWatch → X-Ray traces (filter `stock-ingest`) | One trace shows ingest → S3 put → `stock-archive-validator`. |
+| 8e | CloudWatch Logs `/aws/lambda/stock-event-logger` | A `PriceIngested` event per new real row, from DynamoDB Streams via the `stock-events` bus. |
 | 9 | Toggle "Show legacy synthetic rows" | The dashed grey series is labelled SYNTHETIC; it's off by default. |
 | 10 | Model evaluation card / `docs/model-evaluation.md` | "Honest result: the LSTM's MAE is $6.18 vs $3.33 for the naive baseline. It does not beat 'tomorrow = today'." |
 | 11 | `curl` the API with no token → 401 | "Every route needs a Cognito JWT." |
@@ -60,6 +62,12 @@ Cognito hosted UI with the OAuth authorization-code flow and PKCE (a public SPA 
 **Q: How is the dashboard hosted without a public bucket?**
 A private S3 bucket (Block Public Access on) behind CloudFront with Origin Access Control: the bucket policy allows `s3:GetObject` only to that one distribution. (Distribution pending AWS account verification.)
 
+**Q: Why run Signals and Score in parallel, and when is a ticker skipped?**
+They are independent (signals read prices, scoring reads predictions and prices), so a Parallel state runs both; each branch catches its own errors so one cannot cancel the other. If ingest reports `inserted == 0 and updated == 0`, nothing changed, so Predict and Signals are skipped and only AAPL scoring runs (tested live 2026-10-26).
+
+**Q: How do you trace a run?**
+X-Ray active tracing on the 8 project Lambdas. The trace header travels with the S3 put, so an ingest trace also contains the archive validator. HTTP APIs do not support X-Ray; state-machine tracing needs a permission that has not been granted.
+
 **Q: What is least privilege here?**
 Each Lambda has its own role scoped to exact tables, prefixes and the one SSM parameter. All new roles carry the `StockRoleBoundary` permissions boundary. The scheduler role can only start this one state machine.
 
@@ -70,7 +78,7 @@ Measured on 40 real trading days: MAE $6.18, RMSE $7.03, MAPE 1.91%, directional
 The project is about the cloud ML pipeline (deployment, scheduling, persistence, monitoring, evaluation). The pipeline measures and publishes the model's real error, which is how you'd detect a weak model in production. Retraining is the documented next step.
 
 **Q: Limitations?**
-Alpha Vantage free tier: unadjusted prices, 100 trading days, 25 requests per day (5 used per run). Predictions for AAPL only, and the model does not beat the naive baseline. Splits are detected, not corrected. US holidays aren't modelled (runs are harmless no-ops). Step Functions execution logging, Athena, X-Ray and an EventBridge bus are not set up (missing permissions). CloudFront is pending. Evaluation samples are small (40 backtest points; 9 live scored days as of 2026-10-15). CI exists but has never run on GitHub (no remote yet).
+Alpha Vantage free tier: unadjusted prices, 100 trading days, 25 requests per day (5 used per run). Predictions for AAPL only, and the model does not beat the naive baseline. Splits are detected, not corrected. US holidays aren't modelled (runs are harmless no-ops). Step Functions execution logging and state-machine tracing are not set up (missing permissions). CloudFront is pending. Evaluation samples are small (40 backtest points; 15 live scored days as of 2026-10-26, model MAE $4.56 vs naive $2.27, no verdict below 20). CI exists but has never run on GitHub (no remote yet).
 
 **Q: What does it cost?**
 Expected $0.00/month inside free tiers; worst case without free tiers is well under $0.50/month at this usage. A $1 zero-spend budget alert exists.

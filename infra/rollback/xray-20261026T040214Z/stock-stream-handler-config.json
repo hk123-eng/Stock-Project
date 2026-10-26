@@ -1,0 +1,43 @@
+{
+    "FunctionName": "stock-stream-handler",
+    "FunctionArn": "arn:aws:lambda:ap-south-1:542601847637:function:stock-stream-handler",
+    "Runtime": "python3.12",
+    "Role": "arn:aws:iam::542601847637:role/stock-stream-handler-role",
+    "Handler": "lambda_function.lambda_handler",
+    "CodeSize": 1346,
+    "Description": "stock-prices stream INSERT (alphavantage) -> PriceIngested on stock-events",
+    "Timeout": 30,
+    "MemorySize": 128,
+    "LastModified": "2026-10-22T12:49:07.352+0000",
+    "CodeSha256": "Mx5yXKhoeH3UrlA3RTGucJURiG0punZdkbhPmcdDsVg=",
+    "Version": "$LATEST",
+    "Environment": {
+        "Variables": {
+            "EVENT_BUS": "stock-events"
+        }
+    },
+    "TracingConfig": {
+        "Mode": "PassThrough"
+    },
+    "RevisionId": "f16d8507-17c7-4c2b-8c42-2485e65dbc57",
+    "State": "Active",
+    "LastUpdateStatus": "Successful",
+    "PackageType": "Zip",
+    "Architectures": [
+        "arm64"
+    ],
+    "EphemeralStorage": {
+        "Size": 512
+    },
+    "SnapStart": {
+        "ApplyOn": "None",
+        "OptimizationStatus": "Off"
+    },
+    "RuntimeVersionConfig": {
+        "RuntimeVersionArn": "arn:aws:lambda:ap-south-1::runtime:0fec05b8b43b0ecfbabe4fd585b35e423f655861556712f8a10b0e8739c36c07"
+    },
+    "LoggingConfig": {
+        "LogFormat": "Text",
+        "LogGroup": "/aws/lambda/stock-stream-handler"
+    }
+}

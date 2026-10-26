@@ -1,9 +1,9 @@
 # Architecture — Cloud Stock Price Monitoring and Prediction
 
 Region `ap-south-1` (Mumbai), account `542601847637`. Everything is serverless and pay-per-use.
-Verified live on 2026-10-05; watchlist, digest, DLQ and dashboard parts verified 2026-10-15. Items marked **pending** are not live.
+Verified live on 2026-10-05; watchlist, digest, DLQ and dashboard parts verified 2026-10-15; events, validator, Athena (2026-10-22), parallel/skip definition, X-Ray and the `stock-api:live` alias verified 2026-10-26. Items marked **pending** are not live.
 
-## End-to-end flow (watchlist pipeline, live since 2026-10-15 23:01 UTC)
+## End-to-end flow (parallel/skip definition, live since 2026-10-26 04:06 UTC)
 
 ```mermaid
 flowchart LR
@@ -18,15 +18,20 @@ flowchart LR
             CS{"CheckSymbol<br/>allow-listed?"}
             W["Wait 15 s<br/>(not before the 1st ticker)"]
             ING["IngestPrices<br/>Lambda stock-ingest<br/>+ split/jump check"]
+            ND{"CheckNewData<br/>inserted == 0 and<br/>updated == 0?"}
+            NN["NoNewData → ScoreNoNewData<br/>(AAPL only) → TickerNoNewData"]
             RM{"RouteModel<br/>AAPL and no new jump?"}
             PRED["Predict<br/>Lambda stock-lstm-inference<br/>(TFLite LSTM, AAPL only)"]
-            SIG["ComputeSignals<br/>Lambda stock-signals<br/>SMA/RSI/MACD/Bollinger"]
-            SCORE["ScorePredictions<br/>Lambda stock-evaluate<br/>(AAPL only)"]
+            subgraph PAR["Parallel SignalsAndScore (each branch catches its own errors)"]
+                SIG["ComputeSignals<br/>Lambda stock-signals<br/>SMA/RSI/MACD/Bollinger"]
+                SCORE["ScorePredictions<br/>Lambda stock-evaluate<br/>(AAPL only)"]
+            end
             TF["Ticker…Failed<br/>(per-ticker result,<br/>other tickers continue)"]
-            CS -- yes --> W --> ING --> RM
-            RM -- yes --> PRED --> SIG
-            RM -- no --> SIG
-            SIG --> SCORE
+            CS -- yes --> W --> ING --> ND
+            ND -- yes --> NN
+            ND -- no --> RM
+            RM -- yes --> PRED --> PAR
+            RM -- no --> PAR
             CS -- no --> TF
             ING -. error .-> TF
             PRED -. error .-> TF
@@ -94,6 +99,19 @@ flowchart LR
     API -- evaluation report --> S3RAW
 ```
 
+`APIGW → API` goes through alias `stock-api:live` (version 3 since 2026-10-26). X-Ray active tracing is on for the 8 project Lambdas (not `stock-lstm-inference`); HTTP APIs and (for now) the state machine are not traced.
+
+## Event-driven side paths (added 2026-10-22)
+
+```mermaid
+flowchart LR
+    DDBP[("DynamoDB stock-prices")] -- "stream NEW_IMAGE<br/>filter INSERT, source=alphavantage" --> SH["Lambda stock-stream-handler"]
+    SH -- PriceIngested --> BUS(["EventBridge bus stock-events"]) -- rule stock-events-log-all --> EL["Lambda stock-event-logger<br/>(CloudWatch Logs)"]
+    S3R[("S3 raw/ archive")] -- ObjectCreated --> AVAL["Lambda stock-archive-validator<br/>no key/URL, schema checks"] --> MAN[("S3 manifests/")]
+    MAN --> ATH["Athena stock-workgroup<br/>Glue stock_project.archive_manifests / daily_prices"]
+```
+Verified live: real INSERTs from the scheduled runs of 2026-10-22 and 10-23 produced 10 `PriceIngested` events in the logger log; every new archive got an `ok` manifest.
+
 Legacy input `{"symbol":"AAPL"}` is still accepted (wrapped into a one-item list by `LegacyInput`), so older manual tests keep working.
 
 ## Failure handling
@@ -123,7 +141,9 @@ flowchart TD
 | Predictions only for AAPL | The LSTM was trained on AAPL only and does not beat a naive baseline; other tickers get prices and signals only, and the API returns 404 "no validated model" for them. |
 | Skip the AAPL prediction when new data contains a ≥ 25% day-over-day jump | Prices are unadjusted, so a stock split looks like a crash; feeding it to the model would produce a meaningless prediction. |
 | Separate digest Lambda | Its role can only write its logs and `StockProject/Pipeline` metrics; it reads no data. |
-| Scoring runs last in the pipeline and writes each score once | A scoring failure can't block the prediction or the alert; `attribute_not_exists(scored_at)` makes re-runs harmless. |
+| Scoring runs in parallel with signals and writes each score once | Neither branch can cancel the other (each catches its own errors); `attribute_not_exists(scored_at)` makes re-runs harmless. |
+| Skip Predict and Signals only when `inserted == 0 and updated == 0` | Owner decision B (2026-10-22). Nothing new means the prediction and signals would be identical; score still runs for AAPL. Alpha Vantage often revises the last bar's volume, so `updated` is usually 1 after a trading day. |
+| API served through a Lambda alias | The integration points at `stock-api:live`; a bad deploy is rolled back by moving the alias, without touching API Gateway. |
 | No model-health verdict below 20 scored days | One or two days of errors say nothing about accuracy; the API and dashboard show "insufficient data" instead. |
 | Schedule 18:30 New York time, Mon–Fri | 2.5 h after the 16:00 close, so Alpha Vantage has the day's bar; `America/New_York` handles DST. On US holidays the run is a harmless no-op (no new row, same prediction key, alert deduplicated). |
 | HTTP API + Cognito JWT authorizer | Cheapest API Gateway type; no route is reachable without a valid Cognito token. |

@@ -118,7 +118,7 @@
 - [x] API allow-list + "no validated model" 404s; dashboard ticker selector + smoke test; deployed/uploaded
 - [x] Switch state machine + schedule input `{"symbols":[...]}` (2026-10-15 23:01 UTC); full test run SUCCEEDED in 90 s, 4 new tickers backfilled 100 rows each, 0 suspicious jumps
 - [x] Forced per-ticker failure test (`["AAPL","ZZZZ"]`): SUCCEEDED, ZZZZ reported failed, email "1 FAILED"; also `{}` → FAILED via PublishFailure and legacy `{"symbol":"AAPL"}` → SUCCEEDED
-- [ ] First scheduled watchlist run (2026-10-16 18:30 ET): check it in the console or email
+- [x] First scheduled watchlist run (2026-10-16 18:30 ET): SUCCEEDED (and every weekday run since, checked 2026-10-26)
 - [ ] Not tested live: a ticker failing inside a Lambda; a real Alpha Vantage throttle
 ### 4. Retraining plan document
 - [x] `docs/retraining-plan.md` (2026-10-15). Nothing trained.
@@ -128,15 +128,16 @@
 - [x] 5c: SQS `stock-pipeline-dlq` (SSE-SQS, 14 d, scheduler-only policy), scheduler role `sqs:SendMessage`, alarms `stock-pipeline-dlq-not-empty` + `stock-pipeline-dlq-new-message`
 - [x] 5c: DLQ test via inert schedule `stock-test-dlq-20261015`: message in DLQ, both alarms → ALARM → SNS (2026-10-15)
 - [x] 5c: DLQ attached to `stock-daily-pipeline` (2026-10-15 23:01 UTC, verified with get-schedule)
-- [ ] Purge the DLQ test message (optional; it expires ~2026-10-29); until then `stock-pipeline-dlq-not-empty` stays in ALARM
+- [x] DLQ test message purged by the owner (2026-10-22 12:26 UTC); `stock-pipeline-dlq-not-empty` OK since 12:33 UTC
 
 ## Phase 9 — stretch (checked 2026-10-15)
-- [ ] (a) Athena + Glue table — parked, permissions missing (JSON in docs/RUN-REPORT.md)
-- [ ] (b) EventBridge custom bus + rule — parked, permissions missing
-- [ ] (c) X-Ray — parked (boundary lacks xray actions; pipeline role must not be edited; HTTP API unsupported)
+- [x] (a) Athena + Glue — done 2026-10-22 (final run 1e)
+- [x] (b) EventBridge custom bus `stock-events` + rule — done 2026-10-22 (final run 1b)
+- [x] (c) X-Ray on 8 Lambdas — done 2026-10-26; state-machine tracing parked (needs policy on `stock-prediction-sfn-role`); HTTP API unsupported
 - [x] (d) API Gateway throttling — already 10 rps / burst 20
 - [ ] (e) TTL/lifecycle — S3 lifecycle denied; DynamoDB TTL deliberately not enabled (no test-only data)
-- [ ] CloudTrail, Cognito groups, SAM/CloudFormation, Bedrock — plan notes only (docs)
+- [x] Cognito groups viewer/admin — done 2026-10-22 (final run 1g)
+- [ ] CloudTrail, SAM/CloudFormation, Bedrock — plan notes only (docs)
 
 ## Cleanup
 - [ ] Confirm seeder is no longer needed (last used 2026-09-16; not yet confirmed)
@@ -146,6 +147,9 @@
 - [ ] Delete unused layer `tflite-runtime-py310` v1 only after approval
 - [x] Set retention on Lambda log groups: 30 days on all six `/aws/lambda/stock-*` (incl. `stock-evaluate`, 2026-10-06)
 - [ ] Delete inert test schedules `stock-test-once-20261005` and `stock-test-dlq-20261015` (approval + permission)
+- [ ] Delete test objects `raw/_test/validator-test-20261022.json` + its manifest (approval)
+- [ ] Optional: remove rollback-point Lambda versions (`stock-ingest:1`, `stock-signals:1`, `stock-api:1`, `stock-api:2`) once satisfied (approval)
+- [ ] Detach build policies from `stock-project` when building is finished (owner)
 - [ ] Remove unused permissions
 - [ ] Verify no public resources (audit checked: S3 Block Public Access on and no bucket policy; no Lambda resource policies or function URLs; SNS policy limited to this account; no API Gateway/CloudFront. Not a full account-wide check.)
 - [ ] Review AWS cost (zero-spend budget exists; Cost Explorer not reviewed)
@@ -163,19 +167,22 @@
 - [x] 1a DynamoDB PITR on stock-prices, stock-predictions, stock-signals (ENABLED, 35 days)
 - [x] 1b EventBridge bus `stock-events` + rule `stock-events-log-all` → `stock-event-logger` (test event logged)
 - [x] 1c Stream on stock-prices (NEW_IMAGE) + `stock-stream-handler` (filtered ESM; direct-invoke test OK)
-- [ ] 1c Observe a real INSERT → PriceIngested in the logger log (after the 2026-10-22 22:30 UTC scheduled run)
+- [x] 1c Real INSERT → PriceIngested observed: 10 events (5 tickers × 10-22, 10-23 runs) in the `stock-event-logger` log
 - [x] 1d S3 raw/ event → `stock-archive-validator` (test object + 44-archive backfill: 44 ok)
 - [x] 1e Athena + Glue (`stock_project`, `stock-workgroup`), docs/athena-queries.md
 - [x] 1f 2 log metric filters (IngestErrors, IngestThrottles) + 2 dashboard widgets
 - [x] 1g Cognito groups viewer/admin (0 members) + GET /me (401 without token; signed-in check pending your login)
 ### 2. Live Lambdas (window 19:00–09:30 ET only)
-- [ ] X-Ray active tracing — READY (`infra/xray/enable-tracing.sh`); HTTP API: not supported (AWS docs); state machine tracing PARKED (IAM JSON in run report)
+- [x] X-Ray active tracing on 8 Lambdas — done 2026-10-26 04:02 UTC; test `test-xray-20261026T040407` SUCCEEDED, traces seen, 0 errors/faults. HTTP API: not supported (AWS docs)
+- [ ] State machine tracing — PARKED (IAM JSON for `stock-prediction-sfn-role` in run report)
 - [ ] SNS message attributes — PARKED by owner decision A (2026-10-22)
-- [ ] `stock-api` alias `live` — READY (`infra/lambda/stock-api-alias.sh`, rollback script, `infra/apigateway/route_tests.py`)
+- [x] `stock-api` alias `live` → version 3, integration repointed — done 2026-10-26 04:03 UTC; 16/16 route tests, HTTPS 401 checks OK
+- [ ] `/me` and dashboard through the alias with a real signed-in token (needs your login)
 ### 3. State machine (window 19:00–09:30 ET only)
-- [ ] Parallel Signals ‖ Score + skip when inserted == 0 and updated == 0 — READY (`--parallel`, validated OK, 8 tests; `switch-to-parallel.sh`)
+- [x] Parallel Signals ‖ Score + skip when inserted == 0 and updated == 0 — deployed 2026-10-26 04:06 UTC; test `test-parallel-20261026T040642` SUCCEEDED on the skip path (Predict/Signals not entered)
+- [ ] Observe the `SignalsAndScore` parallel path live: scheduled run Mon 2026-10-26 18:30 ET (22:30 UTC); rollback `infra/stepfunctions/rollback-parallel.sh` if it fails
 ### 4–7
-- [ ] SFN logging: IAM JSON shown to owner 2026-10-22 (re-checked: user still lacks logs:CreateLogDelivery/PutResourcePolicy/CreateLogGroup) — WAITING for owner to apply it; then enable ERROR logging + 30-day retention
+- [ ] SFN logging: P1 still NOT attached (re-checked 2026-10-26: CreateLogGroup/CreateLogDelivery/UpdateLogDelivery/PutResourcePolicy implicitDeny) — WAITING for owner; then ERROR logging + 30-day retention
 - [x] Local baseline benchmark → docs/model-evaluation.md (naive/5-day mean/drift/AR(5), n = 53; LSTM overlap n = 40; live n = 13; no training, model untouched)
 - [ ] GitHub remote + push — WAITING for the repo URL and "push"
-- [ ] Final docs
+- [x] Final docs (2026-10-26)

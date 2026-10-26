@@ -1,0 +1,4 @@
+{
+    "Policy": "{\"Version\":\"2012-10-17\",\"Id\":\"default\",\"Statement\":[{\"Sid\":\"apigw-stock-dashboard-api\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"apigateway.amazonaws.com\"},\"Action\":\"lambda:InvokeFunction\",\"Resource\":\"arn:aws:lambda:ap-south-1:542601847637:function:stock-api\",\"Condition\":{\"ArnLike\":{\"AWS:SourceArn\":\"arn:aws:execute-api:ap-south-1:542601847637:sjdmkf8iag/*/GET/*\"}}}]}",
+    "RevisionId": "3b9f7eac-b2e0-4557-bcdf-469559969b96"
+}

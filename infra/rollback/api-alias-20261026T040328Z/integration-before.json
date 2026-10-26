@@ -1,0 +1,9 @@
+{
+    "ConnectionType": "INTERNET",
+    "IntegrationId": "bp6k0pq",
+    "IntegrationMethod": "POST",
+    "IntegrationType": "AWS_PROXY",
+    "IntegrationUri": "arn:aws:lambda:ap-south-1:542601847637:function:stock-api",
+    "PayloadFormatVersion": "2.0",
+    "TimeoutInMillis": 15000
+}

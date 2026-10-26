@@ -19,7 +19,10 @@ src/inference   Lambda stock-lstm-inference (predict / evaluate)
 src/signals     Lambda stock-signals        (SMA/RSI/volatility/MACD/Bollinger + alert decision)
 src/digest      Lambda stock-alert-digest   (one combined email per run)
 src/evaluate    Lambda stock-evaluate       (score predictions vs actual + naive baseline)
-src/api         Lambda stock-api            (read-only HTTP API, 5-ticker allow-list)
+src/api         Lambda stock-api            (read-only HTTP API, 5-ticker allow-list; served via alias `live`)
+src/stream_handler  Lambda stock-stream-handler (DynamoDB stream INSERT → EventBridge bus stock-events)
+src/event_logger    Lambda stock-event-logger   (logs every stock-events event)
+src/archive_validator Lambda stock-archive-validator (S3 raw/ archive check → manifests/ for Athena)
 dashboard/      Static SPA (Chart.js, Cognito PKCE)
 infra/          IAM policies, Step Functions generator + switch/rollback scripts, scheduler, SQS, alarms,
                 CloudWatch dashboard, CloudFront, Cognito IDs, time_guard.py
@@ -32,5 +35,7 @@ tests/          python tests/run_all.py (needs boto3)   and   node tests/dashboa
 cd dashboard && python -m http.server 8080
 ```
 Open http://localhost:8080/ and sign in with the Cognito user you created.
+
+Per ticker the pipeline skips Predict and Signals when ingest reports `inserted == 0 and updated == 0`; otherwise Signals and Score run in parallel. The 8 project Lambdas send X-Ray traces (not `stock-lstm-inference`).
 
 Prices are unadjusted and limited to the latest 100 trading days (Alpha Vantage free tier); a ≥ 25% day-over-day jump is flagged as a possible split. The legacy synthetic rows from the prototype are kept but excluded from everything, and are labelled SYNTHETIC wherever they can be shown.

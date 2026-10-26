@@ -1,4 +1,4 @@
-# Run report (2026-10-15, finished 2026-10-15 ~23:30 UTC)
+# Run report (2026-10-15; final run 2026-10-22; resumed 2026-10-26 — newest section at the end)
 
 Only verified facts are recorded here. Times are UTC unless marked ET (America/New_York).
 
@@ -295,7 +295,7 @@ Work order from the owner (2026-10-22). Decisions on "go": **A** SNS message att
 - Not tested: `/me` with a real signed-in token (needs the owner's login; the deploy user does not create users or passwords).
 - A transient "Could not connect to the endpoint URL" error hit the first attempt; nothing was created by it (verified: 9 routes before the retry).
 
-## Items 2 and 3 — prepared, NOT deployed (window closed at 2026-10-22 14:13 UTC = 10:13 ET)
+## Items 2 and 3 — prepared 2026-10-22, NOT deployed then (window closed at 14:13 UTC = 10:13 ET); deployed 2026-10-26, see the last section
 Owner rule: deploy/test only **19:00 ET → 09:30 ET next day** (04:30 → 19:00 IST), never 16:00–18:30 ET. `infra/time_guard.py --strict` enforces it (weekdays: 09:30–19:00 ET blocked; tests in `tests/test_time_guard.py`) and every item 2/3 script and `run_test.py` now call it with `--strict`.
 **Next window: Thu 2026-10-22 19:00 ET = 23:00 UTC = Fri 2026-10-23 04:30 IST, until Fri 09:30 ET = 13:30 UTC = 19:00 IST.**
 
@@ -353,3 +353,108 @@ Nothing was applied and logging is still OFF. Once the owner confirms the policy
 - DLQ: the owner purged the queue; `stock-pipeline-dlq-not-empty` returned to OK at 12:33 UTC, and `stock-pipeline-dlq-new-message` is OK.
 
 ## Alpha Vantage calls by the deploy user on 2026-10-22: 0 of 10
+
+---
+
+# Resume session 2026-10-26 (03:54–~04:40 UTC = Sun 23:54 → Mon 00:40 ET = Mon 09:24–10:10 IST)
+
+## Step 0 (read-only, 03:54–04:00 UTC)
+- **Window:** open. Sun 2026-10-25 23:54 EDT falls in 19:00 ET → 09:30 ET; it closes Mon 09:30 ET = 13:30 UTC = 19:00 IST. US clocks go back on Sun 2026-11-01: from Mon 2026-11-02 the 18:30 ET run is 23:30 UTC (05:00 IST), and the window is 00:00 → 14:30 UTC (05:30 → 20:00 IST).
+- **`time_guard.py --strict` gap:** it allows the whole weekend, while the owner's rule taken literally (19:00 → 09:30 ET only, never 16:00–18:30 ET) would block weekend daytime. No effect this session (all work fell inside the literal window). Not changed.
+- **Scheduled runs since 2026-10-22:** Thu 10-22 18:30 ET (`ca6ada8e-…`) and Fri 10-23 18:30 ET (`ca6adbdf-…`): both SUCCEEDED in 87 s. All 5 tickers each day: `inserted 1, updated 1, unchanged 98`, 0 suspicious jumps. Emails (SNS MessageIds present): "Stock watchlist: AAPL MACD_CROSS; GOOGL BIG_MOVE; AMZN BIG_MOVE; NVDA BIG_MOVE" (10-22) and "Stock watchlist: AMZN MACD_CROSS" (10-23). AAPL predictions 341.3679 (as-of 10-22) and 342.2853 (as-of 10-23), both `inputs_outside_scaler_range: true`. No FAILED execution since 2026-10-16.
+- **Real INSERT through the DynamoDB stream: observed.** `stock-stream-handler` logged 10 invocations (`records 1, published 1`) at 22:30–22:31 UTC on 10-22 and 10-23; `stock-event-logger` logged the 10 matching `PriceIngested` events (`data_type real`, `adjusted false`). Event source mapping Enabled, LastProcessingResult OK.
+- `stock-archive-validator`: the 10 new archives of 10-22/10-23 → 10 manifests, all `status ok`, no findings.
+- Lambda `Errors` 2026-10-22 20:00 → 2026-10-26 04:00 UTC: 0 for all 9 functions. `TickerFailures` 0; no `IngestErrors`/`IngestThrottles` datapoints.
+- Alarms: all 3 OK. Only state change since 2026-10-22: `stock-pipeline-dlq-not-empty` ALARM → OK at 12:33 UTC 10-22 (after the owner's purge). DLQ: 0 messages. No failure email was sent (no PublishFailure, no alarm transition to ALARM); the inbox itself was not checked.
+- IAM user `stock-project`: ReadOnlyAccess, StockIamScoped, StockProjectBuildAccess, StockProjectBuildAccessPhase3to6, StockProjectPhase8, StockProjectPhase9; no inline policies. `StockRoleBoundary` default **v3** (2026-10-15), versions v1–v3.
+- **Step Functions logging:** `stock-prediction-sfn-role` unchanged (inline `stock-prediction-sfn-inline-policy` with `WriteExecutionLogs`, and `stock-pipeline-extend`). The **user** policy P1 is still **not attached**: `simulate-principal-policy` → `logs:CreateLogGroup`, `CreateLogDelivery`, `UpdateLogDelivery`, `PutResourcePolicy` implicitDeny. No `/aws/vendedlogs/states/*` log group. Logging OFF.
+- Items 2/3 still ready: live definition == `stock-prediction-pipeline.watchlist.asl.json`; `stock-api` `$LATEST` CodeSha256 `XYfDNDxW…` (the `/me` code), no aliases, integration `bp6k0pq` → unqualified function; all 8 target functions PassThrough. 92 Python unit tests + dashboard tests passed.
+- Local slip, fixed: running `build_definition.py --help` regenerated `infra/stepfunctions/stock-prediction-pipeline.asl.json` (the script ignores unknown flags); restored with `git checkout` before anything else; tree clean.
+
+## Item 2 — deployed and tested 2026-10-26 04:02–04:06 UTC (00:02–00:06 ET)
+- **2a X-Ray** (`bash infra/xray/enable-tracing.sh`, 04:02 UTC): inline policy `stock-xray-write` (`xray:PutTraceSegments`, `xray:PutTelemetryRecords`, Resource `*`) added to `stock-ingest-role`, `stock-signals-role`, `stock-evaluate-role`, `stock-alert-digest-role`, `stock-api-role`, `stock-event-logger-role`, `stock-stream-handler-role`, `stock-archive-validator-role`; TracingConfig **Active** on those 8 functions (verified with `list-functions`). `stock-lstm-inference` and `stock-db-seeder` stay PassThrough. Pre-change configurations: `infra/rollback/xray-20261026T040214Z/`. Rollback: `bash infra/xray/rollback-tracing.sh`.
+- **2c alias** (`bash infra/lambda/stock-api-alias.sh`, 04:03 UTC): published **`stock-api` version 3** (CodeSha256 `XYfDNDxW…` = the `/me` code, tracing Active); alias **`live` → 3**; permission `apigw-stock-dashboard-api-live` (apigateway.amazonaws.com, source `…:sjdmkf8iag/*/GET/*`, source account); integration `bp6k0pq` → `function:stock-api:live`. Before-state: `infra/rollback/api-alias-20261026T040328Z/`. Rollback: `bash infra/lambda/stock-api-alias-rollback.sh` (integration back to the unqualified function), or point `live` at version 2.
+- Tests: `route_tests.py live` → **16/16 OK** (all 9 data routes, 404/400/405, `/me` with/without claims). HTTPS: `/me` and `/prices` without token 401, garbage token 401, forged unsigned "admin" token 401, `POST /me` 404. The alias → Lambda path through API Gateway with a real signed-in token is **not** tested (needs the owner's login).
+- **Full pipeline test** `test-xray-20261026T040407` (5 tickers, 5 Alpha Vantage calls): **SUCCEEDED, 86 s, 1st attempt.** All 5: `inserted 0, updated 1, unchanged 99` (Friday's bar was revised again after the Fri 22:30 UTC run), 0 jumps; AAPL prediction 342.2853 (as-of 10-23, same value as the scheduled run); AMZN `MACD_CROSS` already sent (dedup); score `newly_scored 0, already_scored 15, pending 1`; digest `send false`, no email.
+- **X-Ray traces (04:04–04:06 UTC):** `stock-ingest` 5, `stock-signals` 5, `stock-evaluate` 1, `stock-alert-digest` 1, `stock-api` 16 (the route tests); 0 with error or fault. The validator's spans are inside the `stock-ingest` traces (e.g. trace `1-6aded137-…`: services stock-ingest + stock-archive-validator, 4 segments) because the trace header travels with the S3 put. `stock-stream-handler`/`stock-event-logger` were not invoked (no INSERT); they will be traced by the next run that inserts a row.
+- Parked (unchanged): state-machine tracing (needs policy on `stock-prediction-sfn-role`, JSON below), 2b SNS message attributes (decision A). HTTP API has no X-Ray support.
+
+## Item 3 — deployed and tested 2026-10-26 04:06–04:08 UTC (00:06–00:08 ET)
+- `bash infra/stepfunctions/switch-to-parallel.sh`: snapshot `infra/stepfunctions/stock-prediction-pipeline.pre-parallel.asl.json` (verified identical to the watchlist file); regenerated definition identical to the committed `stock-prediction-pipeline.parallel.asl.json`; AWS validation OK; `update-state-machine` at 04:06:34 UTC. Schedule, logging (OFF) and tracing (disabled) unchanged. Rollback: `bash infra/stepfunctions/rollback-parallel.sh`.
+- **Full test** `test-parallel-20261026T040642` (5 tickers, 5 calls): **SUCCEEDED, 66 s, 1st attempt.** All 5: `inserted 0, updated 0, unchanged 100` → **skip path**: `skipped "no new or updated rows"`, AAPL score still ran (`newly_scored 0, already_scored 15, pending 1`), digest `send false`, no email. Execution history: states entered = ValidateInput, 5× CheckSymbol/SpaceOutCalls/IngestPrices/CheckIngest/CheckNewData/NoNewData/TickerNoNewData, 4× WaitBetweenTickers, 1× ScoreNoNewData/CheckScoreNoNewData, BuildDigest, CheckDigest, DigestNeeded. **Predict, ComputeSignals and SignalsAndScore were not entered.**
+- **Not yet observed live: the parallel branch (`SignalsAndScore`).** My 10 calls for the day are used, so the first live run of that path is the scheduled run **Mon 2026-10-26 18:30 ET = 22:30 UTC = Tue 04:00 IST**. If it fails: `bash infra/stepfunctions/rollback-parallel.sh` (inside the window).
+
+## Item 4 — not done
+P1 (below) is not attached to `stock-project`, so per the owner's instruction nothing was changed. Logging stays OFF.
+
+## Item 6 — not done
+No repository URL or "push" given. No remote exists.
+
+## Alpha Vantage calls by the deploy user on 2026-10-26 (UTC and ET date both Mon 10-26): **10 of 10**
+| Time (UTC) | Calls | Execution |
+|---|---|---|
+| 04:04 | 5 | `test-xray-20261026T040407` |
+| 04:06 | 5 | `test-parallel-20261026T040642` |
+
+No retries (no throttle). The scheduled run tonight adds 5 → 15 of 25 on the key for that day.
+
+## Cost impact of this session
+| Item | Use | Monthly |
+|---|---|---|
+| X-Ray (8 functions) | ~30 traces per weekday ≈ 700/month; 100k traces free, then $5.00/million | $0.00 (worst case without free tier ≈ $0.004) |
+| Lambda version 3 + alias | no charge | $0.00 |
+| Parallel definition | about the same state transitions as before (skip days use fewer); within 4,000 free | $0.00 |
+| 2 test executions, ~30 Lambda invocations | one-off | $0.00 |
+
+Total: **$0.00/month expected; well under $0.50/month per item** even without free tiers.
+
+## Parked items — ready-to-paste IAM JSON (to be applied by the owner; nothing was worked around)
+**P1 – Step Functions execution logging** — policy on IAM user `stock-project` (still needed, re-checked 2026-10-26):
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "StockSfnLogGroup", "Effect": "Allow",
+     "Action": ["logs:CreateLogGroup", "logs:PutRetentionPolicy"],
+     "Resource": "arn:aws:logs:ap-south-1:542601847637:log-group:/aws/vendedlogs/states/stock-*"},
+    {"Sid": "SfnLogDelivery", "Effect": "Allow",
+     "Action": ["logs:CreateLogDelivery", "logs:GetLogDelivery", "logs:UpdateLogDelivery", "logs:DeleteLogDelivery",
+                "logs:ListLogDeliveries", "logs:PutResourcePolicy", "logs:DescribeResourcePolicies", "logs:DescribeLogGroups"],
+     "Resource": "*"}
+  ]
+}
+```
+After you attach it: the deploy user creates `/aws/vendedlogs/states/stock-prediction-pipeline` with 30-day retention and sets `level=ERROR, includeExecutionData=false` (inside the window, rollback copy first).
+
+**State-machine X-Ray tracing** — inline policy on `stock-prediction-sfn-role` (the deploy user may not edit that role); afterwards the deploy user runs `update-state-machine --tracing-configuration enabled=true`:
+```json
+{"Version": "2012-10-17", "Statement": [{"Sid": "StockSfnXRay", "Effect": "Allow",
+  "Action": ["xray:PutTraceSegments", "xray:PutTelemetryRecords", "xray:GetSamplingRules", "xray:GetSamplingTargets"],
+  "Resource": "*"}]}
+```
+
+**P5 – S3 lifecycle for `athena-results/` (optional)** — policy on IAM user `stock-project`:
+```json
+{"Version": "2012-10-17", "Statement": [{"Sid": "RawBucketLifecycle", "Effect": "Allow",
+  "Action": ["s3:GetLifecycleConfiguration", "s3:PutLifecycleConfiguration"],
+  "Resource": "arn:aws:s3:::stock-prediction-raw-542601847637-ap-south-1-an"}]}
+```
+
+**SNS message attributes (2b):** parked by owner decision A; no IAM change needed (it would be a state-machine definition change).
+
+No longer needed: P2 (Athena/Glue) and P3 (EventBridge bus) are covered by `StockProjectPhase9`; P4 part 1 by boundary v3.
+
+## Cleanup list (all optional; deletions need your approval; nothing deleted)
+AWS:
+- Lambda `stock-db-seeder` + role `stock-db-seeder-role` (legacy synthetic data generator).
+- Lambda layer `tflite-runtime-py310` **v1** (v2 in use); S3 `layers/tflite-layer.zip` (81 MB).
+- Inert one-time schedules `stock-test-once-20261005`, `stock-test-dlq-20261015`.
+- Test objects `raw/_test/validator-test-20261022.json` and `manifests/_test/validator-test-20261022.json.manifest.json` (labelled "NOT market data").
+- Rollback points to keep until you are satisfied, then optional: Lambda versions `stock-ingest:1`, `stock-signals:1`, `stock-api:1`, `stock-api:2`, `stock-lstm-inference:1`.
+- When building is finished: detach `StockProjectBuildAccess`, `StockProjectBuildAccessPhase3to6`, `StockProjectPhase8`, `StockProjectPhase9` (and `StockIamScoped` if no new roles are needed) from `stock-project`.
+
+Local (rollback evidence, committed; keep): `infra/rollback/xray-20261026T040214Z/`, `infra/rollback/api-alias-20261026T040328Z/`, `infra/stepfunctions/stock-prediction-pipeline.pre-parallel.asl.json`.
+
+## What to check next
+1. Tonight's scheduled run (Mon 10-26 18:30 ET = 22:30 UTC = Tue 04:00 IST): first live run of `SignalsAndScore` and first traced stream/event-logger invocations. Expected `inserted 1` per ticker.
+2. A signed-in browser test of the dashboard and `/me` (your login).

@@ -1,0 +1,43 @@
+{
+    "FunctionName": "stock-alert-digest",
+    "FunctionArn": "arn:aws:lambda:ap-south-1:542601847637:function:stock-alert-digest",
+    "Runtime": "python3.12",
+    "Role": "arn:aws:iam::542601847637:role/stock-alert-digest-role",
+    "Handler": "lambda_function.lambda_handler",
+    "CodeSize": 2445,
+    "Description": "Phase 8: one combined email per watchlist run",
+    "Timeout": 30,
+    "MemorySize": 128,
+    "LastModified": "2026-10-15T13:46:07.164+0000",
+    "CodeSha256": "TUGLjeKw86ADyoTuUOrYRsCZFLZBHqQ7LHEKTkGfCIc=",
+    "Version": "$LATEST",
+    "Environment": {
+        "Variables": {
+            "MODEL_SYMBOLS": "AAPL"
+        }
+    },
+    "TracingConfig": {
+        "Mode": "PassThrough"
+    },
+    "RevisionId": "cc6bfbf8-3992-46cf-bf29-e9bb95ad721b",
+    "State": "Active",
+    "LastUpdateStatus": "Successful",
+    "PackageType": "Zip",
+    "Architectures": [
+        "arm64"
+    ],
+    "EphemeralStorage": {
+        "Size": 512
+    },
+    "SnapStart": {
+        "ApplyOn": "None",
+        "OptimizationStatus": "Off"
+    },
+    "RuntimeVersionConfig": {
+        "RuntimeVersionArn": "arn:aws:lambda:ap-south-1::runtime:0fec05b8b43b0ecfbabe4fd585b35e423f655861556712f8a10b0e8739c36c07"
+    },
+    "LoggingConfig": {
+        "LogFormat": "Text",
+        "LogGroup": "/aws/lambda/stock-alert-digest"
+    }
+}
